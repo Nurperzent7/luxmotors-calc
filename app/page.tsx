@@ -634,6 +634,7 @@ export default function Home() {
         </section>
 
         {!embed && (
+        <>
         <section className="mt-16">
           <h2 className="mb-6 text-3xl font-semibold">Процесс импорта</h2>
           <div className="grid gap-4 md:grid-cols-4">
@@ -774,6 +775,7 @@ export default function Home() {
             <p>© 2026 Lux Motors</p>
           </div>
         </footer>
+        </>
         )}
       </div>
     </main>
