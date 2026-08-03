@@ -90,84 +90,108 @@ const data = rawData.slice(1)
     console.log({ bmwChassis, expectedSeries, title: normalizedTitle })
 
     // Игнорируем общие слова при поиске
-    const commonWords = ['M', 'SPORT', 'COMPETITION', 'XDRIVE', 'SDRIVE', 'PACKAGE', 'EDITION', 'LINE', 'STYLE', 'LUXURY']
-    
-    const titleWords =
-    normalizedTitle
-    .toUpperCase()
-    .match(/[A-Z0-9]+/g)
-    ?.filter(w => !commonWords.includes(w) && w.length > 1) || []
+    const commonWords = new Set([
+      "M", "SPORT", "COMPETITION", "XDRIVE", "SDRIVE", "PACKAGE", "EDITION",
+      "LINE", "STYLE", "LUXURY", "EXCLUSIVE", "PREMIUM", "CLASSIC", "MODERN",
+      "LPG", "HYBRID", "ELECTRIC", "TURBO", "AUTO", "MANUAL",
+    ])
 
-let bestRow = null
-let bestScore = 0
+    const tokenize = (value: string) =>
+      value
+        .toUpperCase()
+        .match(/[A-Z0-9]+/g)
+        ?.filter((w) => !commonWords.has(w) && w.length > 1) || []
 
-for (const row of data) {
+    const titleWords = tokenize(normalizedTitle)
+    const titleWordSet = new Set(titleWords)
 
-  const model =
-  String(row["C"] || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9 ]/g, " ")
+    let bestRow: any = null
+    let bestScore = 0
 
-    const rowWords =
-    model.match(/[A-Z0-9]+/g)
-    ?.filter(w => !commonWords.includes(w) && w.length > 1) || []
+    for (const row of data) {
+      const brand = String(row["B"] || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]/g, " ")
+        .trim()
+      const model = String(row["C"] || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]/g, " ")
+        .trim()
 
-  const rowEngine =
-    Number(row["D"])
+      const rowWords = tokenize(model)
+      if (rowWords.length === 0) continue
 
-    let score = 0
+      const rowEngine = Number(row["D"])
+      const rowYear = Number(row["E"])
+      let score = 0
+      let exactModelHits = 0
 
-    for (const word of rowWords) {
-    
-      if (
-        titleWords.some((t) => t.includes(word))
-      ) {
-        score += 3
+      // Только точное совпадение токенов — иначе GRAN матчит GRANDEUR
+      for (const word of rowWords) {
+        if (titleWordSet.has(word)) {
+          exactModelHits++
+          score += 8 + Math.min(word.length, 10)
+        }
+      }
+
+      // Без совпадения имени модели строку не берём (объём/год сами по себе недостаточны)
+      if (exactModelHits === 0) continue
+
+      if (brand && (titleWordSet.has(brand) || normalizedTitle.includes(brand))) {
+        score += 20
+      }
+
+      if (rowEngine === engineCC) {
+        score += 12
+      } else if (Number.isFinite(rowEngine) && Math.abs(rowEngine - engineCC) <= 200) {
+        score += 4
+      }
+
+      if (rowYear === year) {
+        score += 6
+      } else if (Number.isFinite(rowYear)) {
+        const yearDiff = Math.abs(rowYear - year)
+        if (yearDiff <= 2) score += 3
+        else if (yearDiff <= 5) score += 1
+      }
+
+      if (expectedSeries) {
+        const modelStr = String(row["C"] || "").toUpperCase()
+        const modelSeriesMatch = modelStr.match(/(\d+)-?SERIES/)
+        if (modelSeriesMatch && modelSeriesMatch[1] === expectedSeries) {
+          score += 15
+        }
+        if (expectedSeries.startsWith("X") && modelStr.includes(`BMW ${expectedSeries}`)) {
+          score += 15
+        }
+      }
+
+      // При равном score предпочитаем ближе по году/объёму
+      const betterTieBreak =
+        bestRow &&
+        score === bestScore &&
+        (
+          Math.abs(rowYear - year) < Math.abs(Number(bestRow["E"]) - year) ||
+          (
+            Math.abs(rowYear - year) === Math.abs(Number(bestRow["E"]) - year) &&
+            Math.abs(rowEngine - engineCC) < Math.abs(Number(bestRow["D"]) - engineCC)
+          )
+        )
+
+      if (score > bestScore || betterTieBreak) {
+        bestScore = score
+        bestRow = row
       }
     }
 
-  // бонус за объем (важный фактор!)
-  if (rowEngine === engineCC) {
-    score += 10
-  }
-  
-  const rowYear =
-    Number(row["E"])
-  
-  if (rowYear === year) {
-    score ++
-  }
+    const foundRow = bestScore >= 8 ? bestRow : null
 
-  // Бонус если серия совпадает
-  if (expectedSeries) {
-    const modelStr = String(row["C"] || "").toUpperCase()
-    // Проверяем что серия в модели совпадает (5-SERIES, 3-SERIES и т.д.)
-    const modelSeriesMatch = modelStr.match(/(\d+)-?SERIES/)
-    if (modelSeriesMatch && modelSeriesMatch[1] === expectedSeries) {
-      score += 15  // Большой бонус за совпадение серии
-    }
-    // Или для X-моделей
-    if (expectedSeries.startsWith('X') && modelStr.includes(`BMW ${expectedSeries}`)) {
-      score += 15
-    }
-  }
-
-  if (score > bestScore) {
-    bestScore = score
-    bestRow = row
-  }
-}
-
-const foundRow =
-  bestScore >= 3
-    ? bestRow
-    : null
-
-console.log({
-  normalizedTitle,
-  bestScore,
-  foundModel: foundRow?.["C"],
-})
+    console.log({
+      normalizedTitle,
+      bestScore,
+      foundModel: foundRow?.["C"],
+      foundBrand: foundRow?.["B"],
+    })
     if (!foundRow) {
       console.log("NOT FOUND:", title)
       return { price: 0 }
