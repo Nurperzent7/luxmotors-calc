@@ -208,15 +208,12 @@ export default function Home() {
     <main className="relative min-h-screen overflow-x-hidden bg-[#F7F7F8] text-zinc-900">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_at_top,_rgba(201,12,7,0.12),_transparent_60%)]" />
       <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-6 md:px-8 lg:px-12">
-        <header className="mb-6 flex items-center gap-3">
+        <header className="mb-6 flex items-center">
           <img
             src="/logo.png"
-            alt="Lux Motors"
-            className="h-10 w-10 rounded-full object-cover ring-2 ring-[#C90C07]/25"
+            alt="Lux Motors — Export from Korea"
+            className="h-14 w-auto object-contain md:h-16"
           />
-          <span className="text-lg font-semibold tracking-wide text-[#C90C07] md:text-xl">
-            Lux Motors
-          </span>
         </header>
 
         <motion.section
