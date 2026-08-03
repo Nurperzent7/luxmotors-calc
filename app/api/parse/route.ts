@@ -5,6 +5,7 @@ import * as XLSX from "xlsx"
 import fs from "fs"
 import path from "path"
 import { isHeyDealerUrl, parseHeyDealerUrl } from "@/lib/heydealer"
+import { getFirstRegFeeKzt, getUtilFeeKzt } from "@/lib/fees"
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
 
@@ -125,6 +126,25 @@ function getCustomsPrice(
     const titleWords = tokenize(normalizedTitle)
     const titleWordSet = new Set(titleWords)
 
+    // Если в названии есть марка из таблицы — ищем только среди этой марки
+    const brandsInTable = [
+      ...new Set(
+        data
+          .map((row) =>
+            String(row["B"] || "")
+              .toUpperCase()
+              .replace(/[^A-Z0-9 ]/g, " ")
+              .trim()
+          )
+          .filter(Boolean)
+      ),
+    ].sort((a, b) => b.length - a.length)
+
+    const detectedBrand =
+      brandsInTable.find(
+        (brand) => titleWordSet.has(brand) || normalizedTitle.includes(brand)
+      ) || null
+
     let bestRow: any = null
     let bestScore = 0
 
@@ -137,6 +157,8 @@ function getCustomsPrice(
         .toUpperCase()
         .replace(/[^A-Z0-9 ]/g, " ")
         .trim()
+
+      if (detectedBrand && brand !== detectedBrand) continue
 
       const rowWords = tokenize(model)
       if (rowWords.length === 0) continue
@@ -158,8 +180,16 @@ function getCustomsPrice(
       // Без совпадения имени модели строку не берём (объём/год сами по себе недостаточны)
       if (exactModelHits === 0) continue
 
+      // Все значимые слова модели есть в названии — сильный бонус
+      if (exactModelHits === rowWords.length) {
+        score += 25
+      }
+
       if (brand && (titleWordSet.has(brand) || normalizedTitle.includes(brand))) {
         score += 20
+      } else if (!detectedBrand) {
+        // Марки в title нет — лёгкий штраф, чтобы не путать одноимённые модели разных брендов без нужды
+        score -= 2
       }
 
       if (Number.isFinite(rowEngine) && rowEngine === engineCC) {
@@ -214,6 +244,7 @@ function getCustomsPrice(
 
     console.log({
       normalizedTitle,
+      detectedBrand,
       bestScore,
       foundModel: foundRow?.["C"],
       foundBrand: foundRow?.["B"],
@@ -397,26 +428,9 @@ export async function POST(req: Request) {
     const logistics =
       1150000
 
-    let recycle = 324000
+    const recycle = getUtilFeeKzt(engine)
 
-    if (engine > 1 && engine <= 2)
-      recycle = 757000
-
-    if (engine > 2 && engine <= 3)
-      recycle = 1080000
-
-    if (engine > 3)
-      recycle = 2490000
-
-    const currentYear = 2026
-
-    const age =
-      currentYear - year
-
-    const primary =
-      age <= 2
-        ? 1081
-        : 2162500
+    const primary = getFirstRegFeeKzt(year)
 
     let excise = 0
 

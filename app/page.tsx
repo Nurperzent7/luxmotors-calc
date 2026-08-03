@@ -20,6 +20,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { getFirstRegFeeKzt, getUtilFeeKzt } from "@/lib/fees"
 
 type CarResult = {
   title: string
@@ -133,11 +134,9 @@ export default function Home() {
       const serviceFee = Math.round(serviceFeeUsd * usdKztRate)
       const svhExpenses = 550000
       const engineVolume = Number(engine)
-      const util =
-        engineVolume <= 1 ? 324000 : engineVolume <= 2 ? 757000 : engineVolume <= 3 ? 1080000 : 2490000
-
-      const age = new Date().getFullYear() - Number(data.year || new Date().getFullYear())
-      const firstReg = age <= 2 ? 1081 : 2162500
+      const util = getUtilFeeKzt(engineVolume)
+      const carYear = Number(data.year || new Date().getFullYear())
+      const firstReg = getFirstRegFeeKzt(carYear)
       const excise = engineVolume >= 3 ? engineVolume * 100000 : 0
       const broker = 500000
       const customs = customsKzt > 0 ? customsKzt : (Number(String(data.customs || "").replace(/[^\d]/g, "")) || 0)
