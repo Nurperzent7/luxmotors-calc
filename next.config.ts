@@ -9,6 +9,19 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'self' https://luxmotors.kz https://www.luxmotors.kz",
+          },
+        ],
+      },
+    ]
+  },
 }
 
 export default nextConfig

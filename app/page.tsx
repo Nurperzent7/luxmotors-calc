@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import {
   ArrowRight,
@@ -64,6 +64,7 @@ const formatKrw = (value: number) =>
   `${new Intl.NumberFormat("ko-KR").format(value)} ₩`
 
 export default function Home() {
+  const [embed, setEmbed] = useState(false)
   const [url, setUrl] = useState("")
   const [heydealerUrl, setHeydealerUrl] = useState("")
   const [engine, setEngine] = useState("2.0")
@@ -76,6 +77,10 @@ export default function Home() {
   const [krwUsdRate, setKrwUsdRate] = useState(1380)
   const [deliveryUsd, setDeliveryUsd] = useState(2000)
   const [customsKzt, setCustomsKzt] = useState(0)
+
+  useEffect(() => {
+    setEmbed(new URLSearchParams(window.location.search).get("embed") === "1")
+  }, [])
 
   const handleCalculate = async () => {
     setError("")
@@ -205,9 +210,12 @@ export default function Home() {
     : ["https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"]
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-[#F7F7F8] text-zinc-900">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_at_top,_rgba(201,12,7,0.12),_transparent_60%)]" />
-      <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-6 md:px-8 lg:px-12">
+    <main className={`relative min-h-screen overflow-x-hidden bg-[#F7F7F8] text-zinc-900 ${embed ? "embed-mode" : ""}`}>
+      {!embed && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_at_top,_rgba(201,12,7,0.12),_transparent_60%)]" />
+      )}
+      <div className={`relative mx-auto w-full max-w-7xl px-4 md:px-8 lg:px-12 ${embed ? "pb-6 pt-2" : "pb-16 pt-6"}`}>
+        {!embed && (
         <header className="mb-6 flex items-center">
           <img
             src="/logo.png"
@@ -215,7 +223,9 @@ export default function Home() {
             className="h-14 w-auto object-contain md:h-16"
           />
         </header>
+        )}
 
+        {!embed && (
         <motion.section
           initial="hidden"
           animate="show"
@@ -258,6 +268,7 @@ export default function Home() {
             />
           </Card>
         </motion.section>
+        )}
 
         <section id="calculator" className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <motion.div initial="hidden" whileInView="show" viewport={{ once: true }} variants={fadeUp}>
@@ -622,6 +633,7 @@ export default function Home() {
           )}
         </section>
 
+        {!embed && (
         <section className="mt-16">
           <h2 className="mb-6 text-3xl font-semibold">Процесс импорта</h2>
           <div className="grid gap-4 md:grid-cols-4">
@@ -762,6 +774,7 @@ export default function Home() {
             <p>© 2026 Lux Motors</p>
           </div>
         </footer>
+        )}
       </div>
     </main>
   )
