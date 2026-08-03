@@ -1,0 +1,6 @@
+const fs = require("fs")
+const s = fs.readFileSync(process.env.TEMP + "/lux.js", "utf8")
+const urls = [...s.matchAll(/https?:\/\/[^"'\\\s]{5,100}/g)].map((m) => m[0])
+console.log([...new Set(urls)].filter((u) => /wa\.me|instagram|t\.me|tiktok|mailto/i.test(u)).join("\n"))
+const phones = [...s.matchAll(/\+?\d[\d\s-]{8,20}\d/g)].map((m) => m[0])
+console.log("PHONES:", [...new Set(phones)].slice(0, 10).join(" | "))
