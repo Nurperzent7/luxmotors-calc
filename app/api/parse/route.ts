@@ -36,16 +36,36 @@ function getCustomsPrice(
     const buf = fs.readFileSync(filePath)
     const workbook = XLSX.read(buf, { type: "buffer" })
 
-    const sheet =
-      workbook.Sheets[workbook.SheetNames[0]]
+    const parseExcelYear = (value: unknown): number => {
+      if (typeof value === "number" && Number.isFinite(value)) return value
+      const text = String(value || "")
+      const match = text.match(/(19|20)\d{2}/)
+      return match ? Number(match[0]) : NaN
+    }
 
-      const rawData: any[] =
-  XLSX.utils.sheet_to_json(sheet, {
-    header: "A",
-  })
+    // Основной лист «Авто» + лист для авто 2015 и старше
+    const sheetNames = workbook.SheetNames.filter((name) => {
+      const n = name.toLowerCase()
+      return n.includes("авто") && !n.includes("мото") && !n.includes("квадро") && !n.includes("грузов")
+    })
+    const namesToUse = sheetNames.length > 0 ? sheetNames : [workbook.SheetNames[0]]
 
-const data = rawData.slice(1)
-      console.log(data[0])
+    const data: any[] = []
+    for (const name of namesToUse) {
+      const sheet = workbook.Sheets[name]
+      if (!sheet) continue
+      const rawData: any[] = XLSX.utils.sheet_to_json(sheet, { header: "A" })
+      for (const row of rawData.slice(1)) {
+        if (!row?.["B"] && !row?.["C"]) continue
+        data.push({
+          ...row,
+          E: parseExcelYear(row["E"]),
+          _sheet: name,
+        })
+      }
+    }
+
+    console.log({ customsSheets: namesToUse, customsRows: data.length, sample: data[0] })
 
       const normalizedTitle = title
   .toUpperCase()
@@ -123,6 +143,7 @@ const data = rawData.slice(1)
 
       const rowEngine = Number(row["D"])
       const rowYear = Number(row["E"])
+      if (!Number.isFinite(rowYear)) continue
       let score = 0
       let exactModelHits = 0
 
@@ -141,7 +162,7 @@ const data = rawData.slice(1)
         score += 20
       }
 
-      if (rowEngine === engineCC) {
+      if (Number.isFinite(rowEngine) && rowEngine === engineCC) {
         score += 12
       } else if (Number.isFinite(rowEngine) && Math.abs(rowEngine - engineCC) <= 200) {
         score += 4
@@ -149,10 +170,15 @@ const data = rawData.slice(1)
 
       if (rowYear === year) {
         score += 6
-      } else if (Number.isFinite(rowYear)) {
+      } else {
         const yearDiff = Math.abs(rowYear - year)
         if (yearDiff <= 2) score += 3
         else if (yearDiff <= 5) score += 1
+      }
+
+      // Для авто 2015 и старше — небольшой приоритет листа «с 2015г. и ранее»
+      if (year <= 2015 && String(row._sheet || "").includes("2015")) {
+        score += 8
       }
 
       if (expectedSeries) {
