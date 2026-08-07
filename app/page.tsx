@@ -173,6 +173,33 @@ export default function Home() {
         selectedEngine: `${engine} л`,
       })
       setActiveImage(0)
+
+      // Автосохранение черновика в каталог luxmotors.kz
+      const almatyPriceKzt = carPriceKzt + logistics + serviceFee
+      void fetch("/api/save-to-catalog", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceUrl: targetUrl,
+          title: cleanTitle,
+          year: data.year || new Date().getFullYear(),
+          mileage: data.mileage || "",
+          price: formatKrw(krwPrice),
+          priceKRW: krwPrice,
+          images: Array.isArray(data.images) ? data.images : [],
+          selectedEngine: `${engine} л`,
+          almatyPriceKzt,
+          priceDelivery: almatyPriceKzt,
+          total,
+          customs,
+          util,
+          firstReg,
+          broker,
+          serviceFee,
+        }),
+      }).catch(() => {
+        /* сохранение не должно ломать расчёт */
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось выполнить расчет")
     } finally {
