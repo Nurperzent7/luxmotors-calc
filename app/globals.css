@@ -30,3 +30,14 @@ body {
   background: rgba(200, 16, 46, 0.18);
   color: #111;
 }
+
+/* Embed (iframe on luxmotors.kz): keep calc UI visible even if motion stalls */
+.embed-mode #calculator > * {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+.embed-mode {
+  min-height: 100%;
+  background: #f7f7f8;
+}

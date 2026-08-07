@@ -58,6 +58,14 @@ const fadeUp = {
   show: { opacity: 1, y: 0 },
 }
 
+/** Always visible on first paint — whileInView in iframe leaves opacity:0 forever */
+const fadeInView = {
+  initial: "show" as const,
+  animate: "show" as const,
+  variants: fadeUp,
+  transition: { duration: 0.35 },
+}
+
 const formatKzt = (value: number) =>
   `${new Intl.NumberFormat("ru-RU").format(value)} ₸`
 
@@ -65,7 +73,10 @@ const formatKrw = (value: number) =>
   `${new Intl.NumberFormat("ko-KR").format(value)} ₩`
 
 export default function Home() {
-  const [embed, setEmbed] = useState(false)
+  const [embed, setEmbed] = useState(() => {
+    if (typeof window === "undefined") return false
+    return new URLSearchParams(window.location.search).get("embed") === "1"
+  })
   const [url, setUrl] = useState("")
   const [heydealerUrl, setHeydealerUrl] = useState("")
   const [engine, setEngine] = useState("2.0")
@@ -80,7 +91,8 @@ export default function Home() {
   const [customsKzt, setCustomsKzt] = useState(0)
 
   useEffect(() => {
-    setEmbed(new URLSearchParams(window.location.search).get("embed") === "1")
+    const params = new URLSearchParams(window.location.search)
+    setEmbed(params.get("embed") === "1")
   }, [])
 
   const handleCalculate = async () => {
@@ -297,7 +309,7 @@ export default function Home() {
         )}
 
         <section id="calculator" className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <motion.div initial="hidden" whileInView="show" viewport={{ once: true }} variants={fadeUp}>
+          <motion.div {...fadeInView}>
             <Card>
               <CardContent className="space-y-4 p-6 md:p-8">
                 <div className="mb-2 flex items-center justify-between">
@@ -370,7 +382,7 @@ export default function Home() {
             </Card>
           </motion.div>
 
-          <motion.aside initial="hidden" whileInView="show" viewport={{ once: true }} variants={fadeUp}>
+          <motion.aside {...fadeInView}>
             <Card className="sticky top-6">
               <CardContent className="space-y-4 p-6">
                 <p className="text-sm uppercase tracking-wide text-zinc-500">Стоимость под ключ</p>
