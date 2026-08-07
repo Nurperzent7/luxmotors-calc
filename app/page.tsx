@@ -130,8 +130,8 @@ export default function Home() {
       const carPriceKzt = Math.round(carPriceUsd * usdKztRate)
       const logisticsUsd = deliveryUsd
       const logistics = Math.round(deliveryUsd * usdKztRate)
-      const serviceFeeUsd = isHeyDealer || data.source === "heydealer" ? 1000 : 700
-      const serviceFee = Math.round(serviceFeeUsd * usdKztRate)
+      const serviceFee = 200000
+      const serviceFeeUsd = Math.round(serviceFee / usdKztRate)
       const svhExpenses = 550000
       const engineVolume = Number(engine)
       const util = getUtilFeeKzt(engineVolume)
@@ -441,7 +441,7 @@ export default function Home() {
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-zinc-600">Услуга:</span>
-                            <span className="font-medium text-zinc-900">${car.serviceFeeUsd}</span>
+                            <span className="font-medium text-zinc-900">{formatKzt(car.serviceFee)}</span>
                           </div>
                         </div>
                       </div>
@@ -580,7 +580,7 @@ export default function Home() {
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
                       <span>Услуга:</span>
-                      <span style={{ fontWeight: "500" }}>${car.serviceFeeUsd}</span>
+                      <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.serviceFee)} ₸</span>
                     </div>
                   </div>
                   <div style={{ textAlign: "center", margin: "8px 0", fontSize: "9px", color: "#666" }}>
