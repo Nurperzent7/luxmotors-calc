@@ -350,9 +350,14 @@ export default function Home() {
                 <div className="space-y-3 text-sm text-zinc-600">
                   {car ? (
                     <>
-                      <div className="flex items-center justify-between">
-                        <span>Авто + Логистика + Услуга:</span>
-                        <span className="font-medium text-zinc-900">${new Intl.NumberFormat("en-US").format(car.carPriceUsd + car.logisticsUsd + car.serviceFeeUsd)}</span>
+                      <div className="flex items-start justify-between gap-3">
+                        <span>Цена до Алматы:</span>
+                        <span className="text-right font-medium text-zinc-900">
+                          ${new Intl.NumberFormat("en-US").format(car.carPriceUsd + car.logisticsUsd + car.serviceFeeUsd)}
+                          <span className="mt-0.5 block text-xs font-normal text-zinc-500">
+                            {formatKzt(car.carPriceKzt + car.logistics + car.serviceFee)}
+                          </span>
+                        </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>Расходы в Казахстане:</span>
