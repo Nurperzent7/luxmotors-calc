@@ -73,15 +73,8 @@ const formatKrw = (value: number) =>
   `${new Intl.NumberFormat("ko-KR").format(value)} ₩`
 
 export default function Home() {
-  const [embed, setEmbed] = useState(() => {
-    if (typeof window === "undefined") return false
-    if (new URLSearchParams(window.location.search).get("embed") === "1") return true
-    try {
-      return window.self !== window.top
-    } catch {
-      return true
-    }
-  })
+  // Always false on first render (SSR + hydrate) to avoid mismatched DOM / dead clicks in iframe
+  const [embed, setEmbed] = useState(false)
   const [url, setUrl] = useState("")
   const [heydealerUrl, setHeydealerUrl] = useState("")
   const [engine, setEngine] = useState("2.0")
@@ -103,8 +96,9 @@ export default function Home() {
     } catch {
       inIframe = true
     }
-    setEmbed(params.get("embed") === "1" || inIframe)
-    if (params.get("embed") === "1" || inIframe) {
+    const nextEmbed = params.get("embed") === "1" || inIframe
+    setEmbed(nextEmbed)
+    if (nextEmbed) {
       document.documentElement.classList.add("embed")
       document.body.classList.add("embed")
     }
@@ -386,7 +380,15 @@ export default function Home() {
                 </div>
 
                 {error && <p className="text-sm text-red-600">{error}</p>}
-                <Button size="lg" className="w-full" onClick={handleCalculate} disabled={loading}>
+                <Button
+                  type="button"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => {
+                    void handleCalculate()
+                  }}
+                  disabled={loading}
+                >
                   {loading ? "Считаем..." : "Рассчитать"}
                 </Button>
               </CardContent>
