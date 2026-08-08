@@ -90,7 +90,7 @@ export default function Home() {
   const [activeImage, setActiveImage] = useState(0)
   const [car, setCar] = useState<CarResult | null>(null)
 
-  const [usdKztRate, setUsdKztRate] = useState(520)
+  const [usdKztRate, setUsdKztRate] = useState(467)
   const [krwUsdRate, setKrwUsdRate] = useState(1380)
   const [deliveryUsd, setDeliveryUsd] = useState(2000)
   const [customsKzt, setCustomsKzt] = useState(0)
@@ -147,7 +147,7 @@ export default function Home() {
       const response = await fetch("/api/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: targetUrl, engine }),
+        body: JSON.stringify({ url: targetUrl, engine, usdKztRate }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data?.error || "Ошибка расчета")
@@ -350,7 +350,7 @@ export default function Home() {
                       type="number"
                       value={usdKztRate}
                       onChange={(e) => setUsdKztRate(Number(e.target.value))}
-                      placeholder="520"
+                      placeholder="467"
                     />
                   </div>
                   <div>

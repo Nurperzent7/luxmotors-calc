@@ -12,7 +12,8 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
 function getCustomsPrice(
   title: string,
   engine: number,
-  year: number
+  year: number,
+  usdKztRate = 467
 ): { price: number; excelYear?: number; carYear?: number; depreciationYears?: number; originalUsd?: number; foundModel?: string } {
 
 
@@ -279,7 +280,7 @@ function getCustomsPrice(
     }
 
     return { 
-      price: Math.round(usd * 520),
+      price: Math.round(usd * usdKztRate),
       excelYear,
       carYear,
       depreciationYears,
@@ -304,6 +305,9 @@ export async function POST(req: Request) {
 
     const selectedEngine =
       Number(body?.engine || 2)
+
+    const usdKztRate =
+      Number(body?.usdKztRate || body?.usdRate || 467) || 467
 
     if (!url) {
       return NextResponse.json(
@@ -474,7 +478,8 @@ export async function POST(req: Request) {
       getCustomsPrice(
         title,
         engine,
-        year
+        year,
+        usdKztRate
       )
       console.log("CUSTOMS RESULT:", customs)
       
@@ -511,7 +516,7 @@ export async function POST(req: Request) {
                 (customs.depreciationYears || 0) > 0
                   ? `${(Math.pow(0.85, customs.depreciationYears || 0) * 100).toFixed(1)}%`
                   : "100%",
-              finalPriceUsd: Math.round(customs.price / 520),
+              finalPriceUsd: Math.round(customs.price / usdKztRate),
             }
           : null,
       recycle: recycle.toLocaleString() + " ₸",
