@@ -372,54 +372,82 @@ export async function POST(req: Request) {
         year = shortYear >= 30 ? 1900 + shortYear : 2000 + shortYear
       }
 
-      const images = new Set<string>()
+      // Уникальные фото Encar: один кадр = один ключ, берём лучшее качество
+      const imageByKey = new Map<string, string>()
+
+      const normalizeImageUrl = (src: string) => {
+        let fullUrl = src.startsWith("http")
+          ? src
+          : src.startsWith("//")
+            ? `https:${src}`
+            : src
+        fullUrl = fullUrl.replace(/&amp;/g, "&").trim()
+        return fullUrl
+      }
+
+      const photoKey = (url: string) => {
+        const match = url.match(/(\d+_\d+)\.(jpg|jpeg|png|webp)/i)
+        if (match) return match[1].toLowerCase()
+        return url.split("?")[0].toLowerCase()
+      }
+
+      const qualityScore = (url: string) => {
+        let score = 0
+        const rh = Number(url.match(/[?&]rh=(\d+)/i)?.[1] || 0)
+        const cw = Number(url.match(/[?&]cw=(\d+)/i)?.[1] || 0)
+        score += rh + cw
+        if (/[?&]t=\d+/i.test(url)) score += 50
+        if (!url.includes("wtmk")) score += 10
+        return score
+      }
+
+      const addImage = (src?: string | null) => {
+        if (!src) return
+        const fullUrl = normalizeImageUrl(src)
+        const valid =
+          (fullUrl.includes(".jpg") ||
+            fullUrl.includes(".jpeg") ||
+            fullUrl.includes(".png") ||
+            fullUrl.includes(".webp")) &&
+          fullUrl.includes("carpicture") &&
+          !fullUrl.includes("logo") &&
+          !fullUrl.includes("icon") &&
+          !fullUrl.includes("banner") &&
+          !fullUrl.includes("blank")
+
+        if (!valid) return
+
+        const key = photoKey(fullUrl)
+        const prev = imageByKey.get(key)
+        if (!prev || qualityScore(fullUrl) > qualityScore(prev)) {
+          imageByKey.set(key, fullUrl)
+        }
+      }
 
       $("img").each((_, el) => {
-        const sources = [
-          $(el).attr("src"),
-          $(el).attr("data-src"),
-          $(el).attr("data-original"),
-          $(el).attr("data-lazy"),
-        ]
-
-        sources.forEach((src) => {
-          if (!src) return
-
-          const fullUrl = src.startsWith("http") ? src : `https:${src}`
-          const valid =
-            (fullUrl.includes(".jpg") ||
-              fullUrl.includes(".jpeg") ||
-              fullUrl.includes(".png") ||
-              fullUrl.includes(".webp")) &&
-            !fullUrl.includes("logo") &&
-            !fullUrl.includes("icon") &&
-            !fullUrl.includes("banner") &&
-            !fullUrl.includes("blank")
-
-          if (valid) images.add(fullUrl)
-        })
+        addImage($(el).attr("src"))
+        addImage($(el).attr("data-src"))
+        addImage($(el).attr("data-original"))
+        addImage($(el).attr("data-lazy"))
       })
 
       const bgMatches =
-        html.match(/https?:\/\/[^"' )]+\.(jpg|jpeg|png|webp)/gi) || []
+        html.match(/https?:\/\/[^"' )\]]+\.(jpg|jpeg|png|webp)[^"' )\]]*/gi) || []
+      bgMatches.forEach((img) => addImage(img))
 
-      bgMatches.forEach((img) => {
-        const valid =
-          !img.includes("logo") &&
-          !img.includes("icon") &&
-          !img.includes("banner") &&
-          !img.includes("blank")
-
-        if (valid) images.add(img)
+      const jsonMatches =
+        html.match(/https?:\\\/\\\/ci\.encar\.com\\\/carpicture[^"'\\\s]+/gi) || []
+      jsonMatches.forEach((raw) => {
+        addImage(raw.replace(/\\\//g, "/").replace(/\\u0026/g, "&"))
       })
 
-      finalImages = Array.from(images)
+      finalImages = Array.from(imageByKey.values())
         .sort((a, b) => {
           const numA = Number(a.match(/_(\d+)\.(jpg|jpeg|png|webp)/i)?.[1] || 0)
           const numB = Number(b.match(/_(\d+)\.(jpg|jpeg|png|webp)/i)?.[1] || 0)
           return numA - numB
         })
-        .slice(0, 50)
+        .slice(0, 20)
     }
 
     const carPriceKzt = Math.round(krw * 0.36)

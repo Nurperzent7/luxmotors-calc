@@ -450,7 +450,7 @@ export default function Home() {
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <div className="flex w-full gap-2 overflow-x-auto">
-                          {images.slice(0, 20).map((img, i) => (
+                          {images.map((img, i) => (
                             <button
                               key={`${img}-${i}`}
                               onClick={() => setActiveImage(i)}
@@ -464,6 +464,9 @@ export default function Home() {
                           <ChevronRight className="h-4 w-4" />
                         </Button>
                       </div>
+                      {images.length > 1 && (
+                        <p className="text-xs text-zinc-500">{activeImage + 1} / {images.length} фото</p>
+                      )}
                     </div>
 
                     <div className="space-y-3">
@@ -657,10 +660,12 @@ export default function Home() {
               </div>
 
               <div style={{ marginBottom: "20px" }}>
-                <h3 style={{ fontSize: "14px", fontWeight: "600", margin: "0 0 12px", color: "#666" }}>ФОТОГРАФИИ АВТОМОБИЛЯ:</h3>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
-                  {images.slice(0, 6).map((img, i) => (
-                    <div key={i} style={{ height: "110px", overflow: "hidden", borderRadius: "6px" }}>
+                <h3 style={{ fontSize: "14px", fontWeight: "600", margin: "0 0 12px", color: "#666" }}>
+                  ФОТОГРАФИИ АВТОМОБИЛЯ ({images.length}):
+                </h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
+                  {images.map((img, i) => (
+                    <div key={i} style={{ height: "90px", overflow: "hidden", borderRadius: "6px" }}>
                       <img src={`/api/image?url=${encodeURIComponent(img)}`} alt={`car-${i}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     </div>
                   ))}

@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       ]
         .filter(Boolean)
         .join("\n"),
-      imageUrls: Array.isArray(body.images) ? body.images.slice(0, 10) : [],
+      imageUrls: Array.isArray(body.images) ? body.images.slice(0, 20) : [],
     }
 
     if (!payload.sourceUrl) {
