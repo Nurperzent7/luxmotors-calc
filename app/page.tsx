@@ -75,7 +75,12 @@ const formatKrw = (value: number) =>
 export default function Home() {
   const [embed, setEmbed] = useState(() => {
     if (typeof window === "undefined") return false
-    return new URLSearchParams(window.location.search).get("embed") === "1"
+    if (new URLSearchParams(window.location.search).get("embed") === "1") return true
+    try {
+      return window.self !== window.top
+    } catch {
+      return true
+    }
   })
   const [url, setUrl] = useState("")
   const [heydealerUrl, setHeydealerUrl] = useState("")
@@ -92,7 +97,17 @@ export default function Home() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    setEmbed(params.get("embed") === "1")
+    let inIframe = false
+    try {
+      inIframe = window.self !== window.top
+    } catch {
+      inIframe = true
+    }
+    setEmbed(params.get("embed") === "1" || inIframe)
+    if (params.get("embed") === "1" || inIframe) {
+      document.documentElement.classList.add("embed")
+      document.body.classList.add("embed")
+    }
   }, [])
 
   const handleCalculate = async () => {
@@ -248,13 +263,13 @@ export default function Home() {
     : ["https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=1200&auto=format&fit=crop"]
 
   return (
-    <main className={`relative min-h-screen overflow-x-hidden bg-[#F7F7F8] text-zinc-900 ${embed ? "embed-mode" : ""}`}>
+    <main className={`relative overflow-x-hidden bg-[#F7F7F8] text-zinc-900 ${embed ? "embed-mode min-h-0" : "min-h-screen"}`}>
       {!embed && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_at_top,_rgba(201,12,7,0.12),_transparent_60%)]" />
+        <div className="marketing-block pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_at_top,_rgba(201,12,7,0.12),_transparent_60%)]" />
       )}
-      <div className={`relative mx-auto w-full max-w-7xl px-4 md:px-8 lg:px-12 ${embed ? "pb-6 pt-2" : "pb-16 pt-6"}`}>
+      <div className={`relative mx-auto w-full max-w-7xl px-4 md:px-8 lg:px-12 ${embed ? "pb-4 pt-2" : "pb-16 pt-6"}`}>
         {!embed && (
-        <header className="mb-6 flex items-center">
+        <header className="mb-6 flex items-center marketing-block">
           <img
             src="/logo.png"
             alt="Lux Motors — Export from Korea"
@@ -264,12 +279,8 @@ export default function Home() {
         )}
 
         {!embed && (
-        <motion.section
-          initial="hidden"
-          animate="show"
-          variants={fadeUp}
-          transition={{ duration: 0.6 }}
-          className="grid items-center gap-10 py-10 md:grid-cols-2 md:py-16"
+        <section
+          className="marketing-block grid items-center gap-10 py-10 md:grid-cols-2 md:py-16"
         >
           <div className="space-y-6">
             <h1 className="text-balance text-5xl font-bold leading-tight text-[#C90C07] md:text-7xl">
@@ -305,7 +316,7 @@ export default function Home() {
               className="h-[340px] w-full object-contain md:h-[430px]"
             />
           </Card>
-        </motion.section>
+        </section>
         )}
 
         <section id="calculator" className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">

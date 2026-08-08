@@ -31,13 +31,24 @@ body {
   color: #111;
 }
 
-/* Embed (iframe on luxmotors.kz): keep calc UI visible even if motion stalls */
+/* Embed (iframe on luxmotors.kz / local site): hide marketing, no empty hero gap */
+html.embed .marketing-block {
+  display: none !important;
+}
+
+html.embed,
+html.embed body,
+html.embed main {
+  min-height: 0 !important;
+  height: auto !important;
+}
+
 .embed-mode #calculator > * {
   opacity: 1 !important;
   transform: none !important;
 }
 
 .embed-mode {
-  min-height: 100%;
+  min-height: 0;
   background: #f7f7f8;
 }
