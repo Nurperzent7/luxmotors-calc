@@ -32,13 +32,13 @@ body {
 }
 
 /* Embed (iframe on luxmotors.kz / local site): hide marketing, no empty hero gap */
-html.embed .marketing-block {
+html[data-embed="1"] .marketing-block {
   display: none !important;
 }
 
-html.embed,
-html.embed body,
-html.embed main {
+html[data-embed="1"],
+html[data-embed="1"] body,
+html[data-embed="1"] main {
   min-height: 0 !important;
   height: auto !important;
 }
@@ -51,4 +51,17 @@ html.embed main {
 .embed-mode {
   min-height: 0;
   background: #f7f7f8;
+}
+
+/* Off-screen capture target for PNG download — must not affect mobile layout */
+.pdf-content {
+  position: fixed !important;
+  left: -10000px !important;
+  top: 0 !important;
+  width: 210mm !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+  z-index: -1 !important;
+  overflow: hidden !important;
 }

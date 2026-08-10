@@ -32,6 +32,29 @@ function parseBrandModel(title: string): { brand: string; model: string } {
       return { brand, model }
     }
   }
+
+  // Частые модели Encar без марки в заголовке
+  const modelHints: Array<{ re: RegExp; brand: string }> = [
+    { re: /\bgrandeur\b/i, brand: "Hyundai" },
+    { re: /\bpalisade\b/i, brand: "Hyundai" },
+    { re: /\btucson\b/i, brand: "Hyundai" },
+    { re: /\bsanta\s*fe\b/i, brand: "Hyundai" },
+    { re: /\bioniq\b/i, brand: "Hyundai" },
+    { re: /\bsonata\b/i, brand: "Hyundai" },
+    { re: /\bstaria\b/i, brand: "Hyundai" },
+    { re: /\bcarnival\b/i, brand: "Kia" },
+    { re: /\bsorento\b/i, brand: "Kia" },
+    { re: /\bsportage\b/i, brand: "Kia" },
+    { re: /\bk5\b/i, brand: "Kia" },
+    { re: /\bev6\b/i, brand: "Kia" },
+    { re: /\bgv80\b|\bg80\b|\bg90\b/i, brand: "Genesis" },
+  ]
+  for (const hint of modelHints) {
+    if (hint.re.test(clean)) {
+      return { brand: hint.brand, model: clean }
+    }
+  }
+
   const parts = clean.split(" ")
   if (parts.length === 1) return { brand: parts[0], model: parts[0] }
   return { brand: parts[0], model: parts.slice(1).join(" ") }
@@ -46,7 +69,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const secret = process.env.CALC_IMPORT_SECRET || "luxmotors-calc-import-2026"
-    const apiBase = (process.env.LUXMOTORS_API_URL || "https://luxmotors.kz").replace(/\/$/, "")
+    // Locally default to local backend; on Vercel use production site
+    const apiBase = (
+      process.env.LUXMOTORS_API_URL ||
+      (process.env.VERCEL ? "https://luxmotors.kz" : "http://127.0.0.1:8080")
+    ).replace(/\/$/, "")
 
     const title = String(body.title || "")
     const { brand, model } = body.brand && body.model
@@ -56,8 +83,11 @@ export async function POST(req: NextRequest) {
     const engine = String(body.selectedEngine || body.engine || "2.0 л")
     const engineVolume = engine.replace(/\s*л\s*$/i, "").trim()
     const priceKRW = digits(body.priceKRW ?? body.price)
+    const priceUsd = Number(body.priceUsd) || 0
+    const carPriceKzt = Number(body.carPriceKzt) || 0
     const almaty = Number(body.priceDelivery ?? body.almatyPriceKzt ?? 0) || 0
-    const turnkey = Number(body.priceTurnkey ?? body.total ?? 0) || 0
+    const logistics = Number(body.logistics) || 0
+    const serviceFee = Number(body.serviceFee) || 200000
 
     const payload = {
       sourceUrl: String(body.sourceUrl || "").trim(),
@@ -71,15 +101,19 @@ export async function POST(req: NextRequest) {
       priceKRW,
       priceKZT: almaty,
       priceDelivery: almaty,
-      priceTurnkey: turnkey,
-      registrationFeeKZT: Number(body.firstReg ?? body.registrationFeeKZT ?? 0) || 0,
-      recyclingFeeKZT: Number(body.util ?? body.recyclingFeeKZT ?? 0) || 0,
-      customsDutyKZT: Number(body.customs ?? body.customsDutyKZT ?? 0) || 0,
-      commission:
-        (Number(body.broker ?? 0) || 0) +
-        (Number(body.serviceFee ?? 0) || 0),
+      priceTurnkey: 0,
+      registrationFeeKZT: 0,
+      recyclingFeeKZT: 0,
+      customsDutyKZT: 0,
+      commission: serviceFee,
       priceDescription: [
-        body.price ? `KRW: ${body.price}` : null,
+        priceKRW ? `Авто: ${new Intl.NumberFormat("ru-RU").format(priceKRW)} ₩` : null,
+        priceUsd ? `Авто: $${new Intl.NumberFormat("en-US").format(priceUsd)}` : null,
+        carPriceKzt ? `Авто: ${new Intl.NumberFormat("ru-RU").format(carPriceKzt)} ₸` : null,
+        logistics ? `Логистика: ${new Intl.NumberFormat("ru-RU").format(logistics)} ₸` : null,
+        `Услуга Lux Motors: ${new Intl.NumberFormat("ru-RU").format(serviceFee)} ₸`,
+        almaty ? `Итого до Алматы: ${new Intl.NumberFormat("ru-RU").format(almaty)} ₸` : null,
+        "Чтобы узнать цену под ключ — обратитесь к нам в WhatsApp",
         body.selectedEngine ? `Двигатель: ${body.selectedEngine}` : null,
         body.sourceUrl ? `Источник: ${body.sourceUrl}` : null,
       ]

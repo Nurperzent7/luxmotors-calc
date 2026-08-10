@@ -36,7 +36,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{if(/[?&]embed=1/.test(location.search)||window.self!==window.top){document.documentElement.classList.add("embed");}}catch(e){document.documentElement.classList.add("embed");}})();`,
+            __html: `(function(){try{if(/[?&]embed=1/.test(location.search)||window.self!==window.top){document.documentElement.setAttribute("data-embed","1");}}catch(e){document.documentElement.setAttribute("data-embed","1");}})();`,
           }}
         />
       </head>

@@ -20,36 +20,25 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { getFirstRegFeeKzt, getUtilFeeKzt } from "@/lib/fees"
+
+const WHATSAPP_URL =
+  "https://wa.me/821021846777?text=" +
+  encodeURIComponent("Здравствуйте! Хочу узнать цену под ключ.")
 
 type CarResult = {
   title: string
   year: string | number
   mileage: string
   price: string
+  priceKrw: number
   images?: string[]
-  customs?: string | number
-  customsDetails?: {
-    foundModel?: string
-    excelYear?: number
-    carYear?: number
-    originalPrice?: number
-    depreciationYears?: number
-    depreciationPercent?: string
-    finalPriceUsd?: number
-  } | null
   carPriceUsd: number
   carPriceKzt: number
   logisticsUsd: number
   logistics: number
   serviceFeeUsd: number
   serviceFee: number
-  util: number
-  firstReg: number
-  excise: number
-  broker: number
-  svhExpenses: number
-  total: number
+  almatyTotal: number
   selectedEngine: string
 }
 
@@ -86,7 +75,8 @@ export default function Home() {
   const [usdKztRate, setUsdKztRate] = useState(467)
   const [krwUsdRate, setKrwUsdRate] = useState(1380)
   const [deliveryUsd, setDeliveryUsd] = useState(2000)
-  const [customsKzt, setCustomsKzt] = useState(0)
+  const [catalogSave, setCatalogSave] = useState<"idle" | "saving" | "ok" | "error">("idle")
+  const [catalogSaveMsg, setCatalogSaveMsg] = useState("")
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -99,8 +89,7 @@ export default function Home() {
     const nextEmbed = params.get("embed") === "1" || inIframe
     setEmbed(nextEmbed)
     if (nextEmbed) {
-      document.documentElement.classList.add("embed")
-      document.body.classList.add("embed")
+      document.documentElement.setAttribute("data-embed", "1")
     }
   }, [])
 
@@ -153,15 +142,7 @@ export default function Home() {
       const logistics = Math.round(deliveryUsd * usdKztRate)
       const serviceFee = 200000
       const serviceFeeUsd = Math.round(serviceFee / usdKztRate)
-      const svhExpenses = 550000
-      const engineVolume = Number(engine)
-      const util = getUtilFeeKzt(engineVolume)
-      const carYear = Number(data.year || new Date().getFullYear())
-      const firstReg = getFirstRegFeeKzt(carYear)
-      const excise = engineVolume >= 3 ? engineVolume * 100000 : 0
-      const broker = 500000
-      const customs = customsKzt > 0 ? customsKzt : (Number(String(data.customs || "").replace(/[^\d]/g, "")) || 0)
-      const total = carPriceKzt + logistics + serviceFee + customs + util + firstReg + excise + broker + svhExpenses
+      const almatyTotal = carPriceKzt + logistics + serviceFee
 
       const cleanTitle = (data.title || "Автомобиль из Кореи")
         .replace(/Sell My Car/gi, "")
@@ -176,51 +157,62 @@ export default function Home() {
         year: data.year || "Unknown",
         mileage: data.mileage || "Unknown",
         price: formatKrw(krwPrice),
+        priceKrw: krwPrice,
         images: Array.isArray(data.images) ? data.images : [],
-        customs,
-        customsDetails: data.customsDetails,
         carPriceUsd,
         carPriceKzt,
         logisticsUsd,
         logistics,
         serviceFeeUsd,
         serviceFee,
-        util,
-        firstReg,
-        excise,
-        broker,
-        svhExpenses,
-        total,
+        almatyTotal,
         selectedEngine: `${engine} л`,
       })
       setActiveImage(0)
+      setCatalogSave("saving")
+      setCatalogSaveMsg("")
 
-      // Автосохранение черновика в каталог luxmotors.kz
-      const almatyPriceKzt = carPriceKzt + logistics + serviceFee
-      void fetch("/api/save-to-catalog", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sourceUrl: targetUrl,
-          title: cleanTitle,
-          year: data.year || new Date().getFullYear(),
-          mileage: data.mileage || "",
-          price: formatKrw(krwPrice),
-          priceKRW: krwPrice,
-          images: Array.isArray(data.images) ? data.images : [],
-          selectedEngine: `${engine} л`,
-          almatyPriceKzt,
-          priceDelivery: almatyPriceKzt,
-          total,
-          customs,
-          util,
-          firstReg,
-          broker,
-          serviceFee,
-        }),
-      }).catch(() => {
-        /* сохранение не должно ломать расчёт */
-      })
+      // Автосохранение в каталог (только до Алматы; под ключ — через WhatsApp)
+      try {
+        const saveRes = await fetch("/api/save-to-catalog", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sourceUrl: targetUrl,
+            title: cleanTitle,
+            year: data.year || new Date().getFullYear(),
+            mileage: data.mileage || "",
+            price: formatKrw(krwPrice),
+            priceKRW: krwPrice,
+            priceUsd: carPriceUsd,
+            images: Array.isArray(data.images) ? data.images : [],
+            selectedEngine: `${engine} л`,
+            almatyPriceKzt: almatyTotal,
+            priceDelivery: almatyTotal,
+            total: 0,
+            serviceFee,
+            logistics,
+            logisticsUsd,
+            carPriceKzt,
+            usdKztRate,
+          }),
+        })
+        const saveData = await saveRes.json().catch(() => ({}))
+        if (!saveRes.ok) {
+          setCatalogSave("error")
+          setCatalogSaveMsg(
+            typeof saveData?.error === "string"
+              ? saveData.error
+              : `Не удалось сохранить в каталог (${saveRes.status})`
+          )
+        } else {
+          setCatalogSave("ok")
+          setCatalogSaveMsg("Авто сохранено в каталог")
+        }
+      } catch {
+        setCatalogSave("error")
+        setCatalogSaveMsg("Ошибка сети при сохранении в каталог")
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось выполнить расчет")
     } finally {
@@ -284,7 +276,7 @@ export default function Home() {
               Импорт авто из Кореи в Казахстан
             </h2>
             <p className="max-w-xl text-zinc-600 md:text-lg">
-              Моментальный расчёт стоимости под ключ: Encar или HeyDealer, таможня, логистика и все расходы в РК.
+              Моментальный расчёт до Алматы: Encar или HeyDealer — цена авто, логистика и услуга Lux Motors.
             </p>
             <div className="flex flex-wrap gap-3">
               <Button size="lg" onClick={() => document.getElementById("calculator")?.scrollIntoView({ behavior: "smooth" })}>
@@ -329,10 +321,10 @@ export default function Home() {
                 <Input
                   value={heydealerUrl}
                   onChange={(e) => setHeydealerUrl(e.target.value)}
-                  placeholder="Вставьте ссылку HeyDealer"
+                  placeholder="Вставьте ссылку KB CHACHACHA"
                 />
                 <Select value={engine} onChange={(e) => setEngine(e.target.value)}>
-                  {["1.0", "1.3", "1.5", "1.6", "2.0", "2.2", "2.4", "2.5", "3.0", "3.3", "3.5", "4.0", "4.4", "5.0", "5.5", "6.0", "6.2"].map((item) => (
+                  {["1.0", "1.3", "1.5", "1.6", "2.0", "2.2", "2.4", "2.5", "3.0", "3.3", "3.5", "3.6", "3.8", "4.0", "4.4", "5.0", "5.5", "6.0", "6.2"].map((item) => (
                     <option key={item} value={item}>{item} л</option>
                   ))}
                 </Select>
@@ -358,8 +350,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
+                <div>
                     <label className="text-xs text-zinc-500">Доставка (USD)</label>
                     <Input
                       type="number"
@@ -368,18 +359,17 @@ export default function Home() {
                       placeholder="2000"
                     />
                   </div>
-                  <div>
-                    <label className="text-xs text-zinc-500">Таможня (₸)</label>
-                    <Input
-                      type="number"
-                      value={customsKzt}
-                      onChange={(e) => setCustomsKzt(Number(e.target.value))}
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
 
                 {error && <p className="text-sm text-red-600">{error}</p>}
+                {catalogSave === "saving" && (
+                  <p className="text-sm text-zinc-500">Сохраняем в каталог…</p>
+                )}
+                {catalogSave === "ok" && (
+                  <p className="text-sm text-emerald-600">{catalogSaveMsg}</p>
+                )}
+                {catalogSave === "error" && (
+                  <p className="text-sm text-red-600">{catalogSaveMsg}</p>
+                )}
                 <Button
                   type="button"
                   size="lg"
@@ -398,27 +388,39 @@ export default function Home() {
           <motion.aside {...fadeInView}>
             <Card className="sticky top-6">
               <CardContent className="space-y-4 p-6">
-                <p className="text-sm uppercase tracking-wide text-zinc-500">Стоимость под ключ</p>
+                <p className="text-sm uppercase tracking-wide text-zinc-500">Цена до Алматы</p>
                 <div className="space-y-3 text-sm text-zinc-600">
                   {car ? (
                     <>
                       <div className="flex items-start justify-between gap-3">
-                        <span>Цена до Алматы:</span>
+                        <span>Авто:</span>
                         <span className="text-right font-medium text-zinc-900">
-                          ${new Intl.NumberFormat("en-US").format(car.carPriceUsd + car.logisticsUsd + car.serviceFeeUsd)}
+                          {car.price}
                           <span className="mt-0.5 block text-xs font-normal text-zinc-500">
-                            {formatKzt(car.carPriceKzt + car.logistics + car.serviceFee)}
+                            ${new Intl.NumberFormat("en-US").format(car.carPriceUsd)} · {formatKzt(car.carPriceKzt)}
                           </span>
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>Расходы в Казахстане:</span>
-                        <span className="font-medium text-zinc-900">{formatKzt((Number(car.customs) || 0) + car.util + car.firstReg + car.svhExpenses + car.broker + car.excise)}</span>
+                        <span>Логистика:</span>
+                        <span className="font-medium text-zinc-900">{formatKzt(car.logistics)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Услуга Lux Motors:</span>
+                        <span className="font-medium text-zinc-900">{formatKzt(car.serviceFee)}</span>
                       </div>
                       <div className="flex items-center justify-between border-t border-zinc-200 pt-2">
-                        <span className="font-medium text-zinc-900">Итого:</span>
-                        <span className="font-semibold text-[#C90C07]">{formatKzt(car.total)}</span>
+                        <span className="font-medium text-zinc-900">Итого до Алматы:</span>
+                        <span className="font-semibold text-[#C90C07]">{formatKzt(car.almatyTotal)}</span>
                       </div>
+                      <a
+                        href={WHATSAPP_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 block rounded-xl bg-[#25D366] px-3 py-2.5 text-center text-sm font-semibold text-white hover:opacity-90"
+                      >
+                        Чтобы узнать цену под ключ — напишите нам
+                      </a>
                     </>
                   ) : (
                     <div className="text-center text-zinc-400">Введите ссылку для расчета</div>
@@ -444,36 +446,45 @@ export default function Home() {
           ) : null}
 
           {car && (
-            <motion.div id="car-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-              <Card>
-                <CardContent className="space-y-6 p-6 md:p-8">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-2xl font-semibold md:text-3xl">{car.title}</h3>
-                    <Button variant="subtle" onClick={downloadCarData}>
+            <motion.div id="car-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-w-0">
+              <Card className="overflow-hidden">
+                <CardContent className="space-y-6 p-4 sm:p-6 md:p-8">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                    <h3 className="break-words text-xl font-semibold sm:text-2xl md:text-3xl">{car.title}</h3>
+                    <Button variant="subtle" className="w-full shrink-0 sm:w-auto" onClick={downloadCarData}>
                       <Download className="mr-2 h-4 w-4" />
                       Скачать PNG
                     </Button>
                   </div>
 
-                  <div className="grid gap-6 lg:grid-cols-2">
-                    <div className="space-y-3">
-                      <img src={images[activeImage]} alt="Car preview" className="h-72 w-full rounded-2xl object-cover md:h-[320px]" />
-                      <div className="flex items-center gap-2">
-                        <Button variant="subtle" onClick={() => setActiveImage((prev) => Math.max(0, prev - 1))}>
+                  <div className="grid min-w-0 gap-6 lg:grid-cols-2">
+                    <div className="min-w-0 space-y-3">
+                      <img
+                        src={`/api/image?url=${encodeURIComponent(images[activeImage])}`}
+                        alt="Car preview"
+                        className="h-56 w-full rounded-2xl bg-zinc-100 object-cover sm:h-72 md:h-[320px]"
+                      />
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Button variant="subtle" className="shrink-0" onClick={() => setActiveImage((prev) => Math.max(0, prev - 1))}>
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <div className="flex w-full gap-2 overflow-x-auto">
+                        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
                           {images.map((img, i) => (
                             <button
                               key={`${img}-${i}`}
+                              type="button"
                               onClick={() => setActiveImage(i)}
                               className={`h-14 w-20 shrink-0 overflow-hidden rounded-xl border ${i === activeImage ? "border-[#C90C07]" : "border-zinc-200"}`}
                             >
-                              <img src={img} alt={`car-${i}`} className="h-full w-full object-cover" />
+                              <img
+                                src={`/api/image?url=${encodeURIComponent(img)}`}
+                                alt={`car-${i}`}
+                                className="h-full w-full object-cover"
+                              />
                             </button>
                           ))}
                         </div>
-                        <Button variant="subtle" onClick={() => setActiveImage((prev) => Math.min(images.length - 1, prev + 1))}>
+                        <Button variant="subtle" className="shrink-0" onClick={() => setActiveImage((prev) => Math.min(images.length - 1, prev + 1))}>
                           <ChevronRight className="h-4 w-4" />
                         </Button>
                       </div>
@@ -482,106 +493,64 @@ export default function Home() {
                       )}
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="min-w-0 space-y-3">
                       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
-                        <p className="mb-2 text-xs text-zinc-500">Стоимость в Корее:</p>
+                        <p className="mb-2 text-xs text-zinc-500">Авто (из Encar):</p>
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-zinc-600">Фактическая стоимость:</span>
-                            <span className="font-medium text-zinc-900">${new Intl.NumberFormat("en-US").format(car.carPriceUsd)}</span>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="shrink-0 text-sm text-zinc-600">₩ (KRW)</span>
+                            <span className="truncate text-right font-medium text-zinc-900">{car.price}</span>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-zinc-600">Логистика:</span>
-                            <span className="font-medium text-zinc-900">${new Intl.NumberFormat("en-US").format(car.logisticsUsd)}</span>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="shrink-0 text-sm text-zinc-600">$ (USD)</span>
+                            <span className="text-right font-medium text-zinc-900">${new Intl.NumberFormat("en-US").format(car.carPriceUsd)}</span>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-zinc-600">Услуга:</span>
-                            <span className="font-medium text-zinc-900">{formatKzt(car.serviceFee)}</span>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="shrink-0 text-sm text-zinc-600">₸ (KZT)</span>
+                            <span className="text-right font-medium text-zinc-900">{formatKzt(car.carPriceKzt)}</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="py-2 text-center">
-                        <p className="text-xs text-zinc-500">— расходы оформление по прибытию авто —</p>
-                      </div>
-
                       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-zinc-600">Растаможка (пошлина+НДС):</span>
-                            <span className="font-medium text-zinc-900">{formatKzt(Number(car.customs || 0))}</span>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="shrink-0 text-sm text-zinc-600">Логистика:</span>
+                            <span className="text-right font-medium text-zinc-900">
+                              ${new Intl.NumberFormat("en-US").format(car.logisticsUsd)}
+                              <span className="mt-0.5 block text-xs font-normal text-zinc-500">{formatKzt(car.logistics)}</span>
+                            </span>
                           </div>
-                          {car.customsDetails && car.customsDetails.finalPriceUsd && car.customsDetails.finalPriceUsd > 0 && (
-                            <div className="mt-1 rounded-lg bg-white p-2 ring-1 ring-zinc-200">
-                              <p className="mb-1 text-xs text-zinc-500">Расчет таможни:</p>
-                              <div className="space-y-1 text-xs text-zinc-600">
-                                <div className="flex justify-between">
-                                  <span>Найдена модель:</span>
-                                  <span className="text-zinc-900">{car.customsDetails.foundModel}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Год в таблице:</span>
-                                  <span className="text-zinc-900">{car.customsDetails.excelYear}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Год вашего авто:</span>
-                                  <span className="text-zinc-900">{car.customsDetails.carYear}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Цена в таблице:</span>
-                                  <span className="text-zinc-900">${car.customsDetails.originalPrice?.toLocaleString()}</span>
-                                </div>
-                                {(car.customsDetails.depreciationYears ?? 0) > 0 && (
-                                  <>
-                                    <div className="flex justify-between">
-                                      <span>Лет разницы:</span>
-                                      <span className="text-zinc-900">{car.customsDetails.depreciationYears}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Учтено стоимости:</span>
-                                      <span className="text-[#C90C07]">{car.customsDetails.depreciationPercent}</span>
-                                    </div>
-                                  </>
-                                )}
-                                <div className="mt-1 flex justify-between border-t border-zinc-200 pt-1">
-                                  <span>Итоговая цена USD:</span>
-                                  <span className="font-medium text-zinc-900">${car.customsDetails.finalPriceUsd?.toLocaleString()}</span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-zinc-600">Утильсбор:</span>
-                            <span className="font-medium text-zinc-900">{formatKzt(car.util)}</span>
-                          </div>
-                          {car.excise > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-zinc-600">Акциз (двигатель ≥3.0L):</span>
-                              <span className="font-medium text-zinc-900">{formatKzt(car.excise)}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-zinc-600">Первичная регистрация:</span>
-                            <span className="font-medium text-zinc-900">{formatKzt(car.firstReg)}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-zinc-600">СВХ расходы:</span>
-                            <span className="font-medium text-zinc-900">{formatKzt(car.svhExpenses)}</span>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="shrink-0 text-sm text-zinc-600">Услуга Lux Motors:</span>
+                            <span className="text-right font-medium text-zinc-900">{formatKzt(car.serviceFee)}</span>
                           </div>
                         </div>
                       </div>
 
                       <div className="rounded-2xl border border-[#C90C07]/25 bg-gradient-to-r from-[#C90C07]/10 to-transparent p-4">
-                        <p className="text-sm text-zinc-600">Стоимость под ключ:</p>
-                        <p className="mt-1 text-2xl font-semibold text-[#C90C07] md:text-3xl">{formatKzt(car.total)}</p>
+                        <p className="text-sm text-zinc-600">Итого до Алматы:</p>
+                        <p className="mt-1 break-words text-2xl font-semibold text-[#C90C07] md:text-3xl">{formatKzt(car.almatyTotal)}</p>
                       </div>
+
+                      <a
+                        href={WHATSAPP_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block rounded-2xl border border-[#25D366]/40 bg-[#25D366]/10 p-4 text-center transition hover:bg-[#25D366]/15"
+                      >
+                        <p className="text-sm font-semibold text-[#128C7E]">
+                          Чтобы узнать цену под ключ — обратитесь к нам
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">Нажмите, чтобы открыть WhatsApp</p>
+                      </a>
                     </div>
                   </div>
 
                   <Button
                     size="lg"
                     className="w-full"
-                    onClick={() => window.open("https://wa.me/821021846777", "_blank")}
+                    onClick={() => window.open(WHATSAPP_URL, "_blank")}
                   >
                     Написать в WhatsApp
                   </Button>
@@ -591,7 +560,19 @@ export default function Home() {
           )}
 
           {car && (
-            <div id="car-pdf-content" className="pdf-content" style={{ width: "210mm", minHeight: "297mm", background: "#fff", color: "#1a1a1a", padding: "20px", fontFamily: "Arial, sans-serif", margin: "20px auto", boxShadow: "0 4px 30px rgba(0,0,0,0.15)", position: "relative", zIndex: 1 }}>
+            <div
+              id="car-pdf-content"
+              className="pdf-content"
+              aria-hidden="true"
+              style={{
+                width: "210mm",
+                minHeight: "297mm",
+                background: "#fff",
+                color: "#1a1a1a",
+                padding: "20px",
+                fontFamily: "Arial, sans-serif",
+              }}
+            >
               <div style={{ textAlign: "center", marginBottom: "20px", paddingBottom: "15px", borderBottom: "3px solid #C90C07" }}>
                 <h1 style={{ fontSize: "22px", fontWeight: "700", margin: "0", color: "#1a1a1a" }}>ПРЕДЛОЖЕНИЕ ДЛЯ КЛИЕНТА</h1>
                 <p style={{ fontSize: "12px", color: "#666", margin: "5px 0 0" }}>Lux Motors · Premium Auto Import from Korea</p>
@@ -624,50 +605,34 @@ export default function Home() {
                     <h3 style={{ fontSize: "14px", fontWeight: "bold", margin: "0", color: "#fff" }}>ЧТО ВХОДИТ В СТОИМОСТЬ</h3>
                   </div>
                   <div style={{ fontSize: "11px", color: "#333", marginBottom: "10px" }}>
-                    <p style={{ fontSize: "10px", color: "#666", margin: "0 0 4px" }}>Стоимость в Корее:</p>
+                    <p style={{ fontSize: "10px", color: "#666", margin: "0 0 4px" }}>Авто (₩ / $ / ₸):</p>
                     <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
-                      <span>Фактическая стоимость:</span>
+                      <span>₩ (KRW)</span>
+                      <span style={{ fontWeight: "500" }}>{car.price}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
+                      <span>$ (USD)</span>
                       <span style={{ fontWeight: "500" }}>${new Intl.NumberFormat("en-US").format(car.carPriceUsd)}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
+                      <span>₸ (KZT)</span>
+                      <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.carPriceKzt)} ₸</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", margin: "6px 0 2px" }}>
                       <span>Логистика:</span>
-                      <span style={{ fontWeight: "500" }}>${new Intl.NumberFormat("en-US").format(car.logisticsUsd)}</span>
+                      <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.logistics)} ₸</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
-                      <span>Услуга:</span>
+                      <span>Услуга Lux Motors:</span>
                       <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.serviceFee)} ₸</span>
                     </div>
-                  </div>
-                  <div style={{ textAlign: "center", margin: "8px 0", fontSize: "9px", color: "#666" }}>
-                    — расходы оформление по прибытию авто —
-                  </div>
-                  <div style={{ fontSize: "11px", color: "#333" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
-                      <span>Растаможка (пошлина+НДС):</span>
-                      <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(Number(car.customs || 0))} ₸</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
-                      <span>Утильсбор:</span>
-                      <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.util)} ₸</span>
-                    </div>
-                    {car.excise > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
-                        <span>Акциз (двигатель ≥3.0L):</span>
-                        <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.excise)} ₸</span>
-                      </div>
-                    )}
-                    <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
-                      <span>Первичная регистрация:</span>
-                      <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.firstReg)} ₸</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
-                      <span>СВХ расходы:</span>
-                      <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.svhExpenses)} ₸</span>
-                    </div>
                     <div style={{ display: "flex", justifyContent: "space-between", margin: "8px 0 0", paddingTop: "6px", borderTop: "2px solid #C90C07", fontWeight: "bold", fontSize: "12px" }}>
-                      <span>Стоимость под ключ:</span>
-                      <span>{new Intl.NumberFormat("ru-RU").format(car.total)} ₸</span>
+                      <span>Итого до Алматы:</span>
+                      <span>{new Intl.NumberFormat("ru-RU").format(car.almatyTotal)} ₸</span>
                     </div>
+                    <p style={{ fontSize: "10px", color: "#128C7E", margin: "10px 0 0", fontWeight: "600", textAlign: "center" }}>
+                      Цену под ключ уточняйте в WhatsApp
+                    </p>
                   </div>
                 </div>
               </div>
