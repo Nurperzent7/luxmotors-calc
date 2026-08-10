@@ -99,17 +99,16 @@ export default function Home() {
     const heydealerLink = heydealerUrl.trim()
 
     if (!encarLink && !heydealerLink) {
-      setError("Введите ссылку Encar или HeyDealer.")
+      setError("Введите ссылку Encar или KB CHACHACHA.")
       return
     }
 
     if (encarLink && heydealerLink) {
-      setError("Введите только одну ссылку — Encar или HeyDealer.")
+      setError("Введите только одну ссылку — Encar или KB CHACHACHA.")
       return
     }
 
     const targetUrl = heydealerLink || encarLink
-    const isHeyDealer = heydealerLink.length > 0
 
     if (encarLink && !encarLink.includes("encar.com")) {
       setError("Введите корректную ссылку Encar.")
@@ -118,10 +117,11 @@ export default function Home() {
 
     if (
       heydealerLink &&
+      !heydealerLink.includes("kbchachacha.com") &&
       !heydealerLink.includes("heydealer.com") &&
       !heydealerLink.startsWith("heydealer://")
     ) {
-      setError("Введите корректную ссылку HeyDealer.")
+      setError("Введите корректную ссылку KB CHACHACHA (или HeyDealer).")
       return
     }
 
@@ -276,7 +276,7 @@ export default function Home() {
               Импорт авто из Кореи в Казахстан
             </h2>
             <p className="max-w-xl text-zinc-600 md:text-lg">
-              Моментальный расчёт до Алматы: Encar или HeyDealer — цена авто, логистика и услуга Lux Motors.
+              Моментальный расчёт до Алматы: Encar или KB CHACHACHA — цена авто, логистика и услуга Lux Motors.
             </p>
             <div className="flex flex-wrap gap-3">
               <Button size="lg" onClick={() => document.getElementById("calculator")?.scrollIntoView({ behavior: "smooth" })}>

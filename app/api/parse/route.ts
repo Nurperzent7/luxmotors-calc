@@ -5,6 +5,7 @@ import * as XLSX from "xlsx"
 import fs from "fs"
 import path from "path"
 import { isHeyDealerUrl, parseHeyDealerUrl } from "@/lib/heydealer"
+import { isKbChachachaUrl, parseKbChachachaUrl } from "@/lib/kbchachacha"
 import { getFirstRegFeeKzt, getUtilFeeKzt } from "@/lib/fees"
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
@@ -321,9 +322,22 @@ export async function POST(req: Request) {
     let mileage = "Unknown"
     let krw = 0
     let finalImages: string[] = []
-    let source: "encar" | "heydealer" = "encar"
+    let source: "encar" | "heydealer" | "kbchachacha" = "encar"
 
-    if (isHeyDealerUrl(url)) {
+    if (isKbChachachaUrl(url)) {
+      const kb = await parseKbChachachaUrl(url)
+      try {
+        const translated = await translate(kb.title, { from: "ko", to: "en" })
+        title = String(translated.text || kb.title).trim()
+      } catch {
+        title = kb.title
+      }
+      year = kb.year
+      mileage = kb.mileage
+      krw = kb.krw
+      finalImages = kb.images
+      source = "kbchachacha"
+    } else if (isHeyDealerUrl(url)) {
       const heydealer = await parseHeyDealerUrl(url)
       title = heydealer.title
       year = heydealer.year

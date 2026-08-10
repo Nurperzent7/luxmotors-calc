@@ -9,9 +9,11 @@ export async function GET(request: Request) {
   }
 
   const referer =
-    url.includes("heydealer.com") || url.includes("image.heydealer.com")
-      ? "https://www.heydealer.com/"
-      : "https://www.encar.com/"
+    url.includes("kbchachacha.com") || url.includes("img.kbchachacha.com")
+      ? "https://www.kbchachacha.com/"
+      : url.includes("heydealer.com") || url.includes("image.heydealer.com")
+        ? "https://www.heydealer.com/"
+        : "https://www.encar.com/"
 
   try {
     const response = await fetch(url, {
