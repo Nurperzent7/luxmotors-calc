@@ -1,5 +1,4 @@
 import { extractEncarVehicleId, fetchEncarBodyDamage, fetchEncarInsuranceHistory } from "@/lib/encar-inspection"
-import { seededShuffle } from "@/lib/shuffle"
 
 const ENCAR_HEADERS = {
   Accept: "application/json",
@@ -68,12 +67,10 @@ export async function fetchEncarVehicleForCalc(vehicleId: string): Promise<Encar
   const liters = displacement > 0 ? (displacement / 1000).toFixed(1) : "2.0"
   const priceMan = Number(veh?.advertisement?.price) || 0
   const photos = Array.isArray(veh?.photos) ? veh.photos : []
-  const images = seededShuffle(
-    photos
-      .map((p: { path?: string }) => (p?.path ? photoUrl(p.path) : ""))
-      .filter(Boolean),
-    id
-  ).slice(0, 20)
+  const images = photos
+    .map((p: { path?: string }) => (p?.path ? photoUrl(p.path) : ""))
+    .filter(Boolean)
+    .slice(0, 20)
 
   let bodyDamage: EncarCalcVehicle["bodyDamage"] = []
   let insuranceRecords: EncarCalcVehicle["insuranceRecords"] = []

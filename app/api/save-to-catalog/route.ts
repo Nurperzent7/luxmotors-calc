@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server"
-import { seededShuffle } from "@/lib/shuffle"
 
 export const runtime = "nodejs"
 
@@ -156,10 +155,7 @@ export async function POST(req: NextRequest) {
       ]
         .filter(Boolean)
         .join("\n"),
-      imageUrls: seededShuffle(
-        Array.isArray(body.images) ? body.images.filter(Boolean) : [],
-        String(body.sourceUrl || title)
-      ).slice(0, 20),
+      imageUrls: Array.isArray(body.images) ? body.images.slice(0, 20) : [],
       bodyDamage: Array.isArray(body.bodyDamage) ? body.bodyDamage : [],
       insuranceRecords: Array.isArray(body.insuranceRecords) ? body.insuranceRecords : [],
       insuranceSummary: body.insuranceSummary && typeof body.insuranceSummary === "object" ? body.insuranceSummary : null,
