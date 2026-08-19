@@ -7,6 +7,7 @@ import path from "path"
 import { isHeyDealerUrl, parseHeyDealerUrl } from "@/lib/heydealer"
 import { isKbChachachaUrl, parseKbChachachaUrl } from "@/lib/kbchachacha"
 import { getFirstRegFeeKzt, getUtilFeeKzt } from "@/lib/fees"
+import { extractEncarVehicleId, fetchEncarBodyDamage, fetchEncarInsuranceHistory } from "@/lib/encar-inspection"
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
 
@@ -323,6 +324,11 @@ export async function POST(req: Request) {
     let krw = 0
     let finalImages: string[] = []
     let source: "encar" | "heydealer" | "kbchachacha" = "encar"
+    let bodyDamage: Array<{ part: string; status: string }> = []
+    let insuranceRecords: Array<{ date: string; type: string; amount: number; description: string }> = []
+    let insuranceSummary: Record<string, unknown> = {}
+    let inspectionMeta: Record<string, unknown> = {}
+    let encarVehicleId: string | null = null
 
     if (isKbChachachaUrl(url)) {
       const kb = await parseKbChachachaUrl(url)
@@ -466,6 +472,24 @@ export async function POST(req: Request) {
           return numA - numB
         })
         .slice(0, 20)
+
+      encarVehicleId = extractEncarVehicleId(String(url))
+      if (encarVehicleId) {
+        try {
+          const insp = await fetchEncarBodyDamage(encarVehicleId)
+          bodyDamage = insp.bodyDamage
+          inspectionMeta = insp.inspectionMeta as Record<string, unknown>
+        } catch (e) {
+          console.warn("[encar-inspection]", e)
+        }
+        try {
+          const hist = await fetchEncarInsuranceHistory(encarVehicleId)
+          insuranceRecords = hist.insuranceRecords
+          insuranceSummary = hist.insuranceSummary as Record<string, unknown>
+        } catch (e) {
+          console.warn("[encar-insurance]", e)
+        }
+      }
     }
 
     const carPriceKzt = Math.round(krw * 0.36)
@@ -539,6 +563,11 @@ export async function POST(req: Request) {
       broker: broker.toLocaleString() + " ₸",
       finalTotal: total.toLocaleString() + " ₸",
       images: finalImages,
+      bodyDamage,
+      insuranceRecords,
+      insuranceSummary,
+      inspectionMeta,
+      encarVehicleId,
     })
   } catch (error) {
     console.log(error)

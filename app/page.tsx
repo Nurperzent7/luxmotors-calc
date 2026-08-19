@@ -140,9 +140,9 @@ export default function Home() {
       const carPriceKzt = Math.round(carPriceUsd * usdKztRate)
       const logisticsUsd = deliveryUsd
       const logistics = Math.round(deliveryUsd * usdKztRate)
-      const serviceFee = 200000
-      const serviceFeeUsd = Math.round(serviceFee / usdKztRate)
-      const almatyTotal = carPriceKzt + logistics + serviceFee
+      const serviceFee = 0
+      const serviceFeeUsd = 0
+      const almatyTotal = carPriceKzt + logistics
 
       const cleanTitle = (data.title || "Автомобиль из Кореи")
         .replace(/Sell My Car/gi, "")
@@ -195,6 +195,9 @@ export default function Home() {
             logisticsUsd,
             carPriceKzt,
             usdKztRate,
+            bodyDamage: Array.isArray(data.bodyDamage) ? data.bodyDamage : [],
+            insuranceRecords: Array.isArray(data.insuranceRecords) ? data.insuranceRecords : [],
+            insuranceSummary: data.insuranceSummary || null,
           }),
         })
         const saveData = await saveRes.json().catch(() => ({}))
@@ -276,7 +279,7 @@ export default function Home() {
               Импорт авто из Кореи в Казахстан
             </h2>
             <p className="max-w-xl text-zinc-600 md:text-lg">
-              Моментальный расчёт до Алматы: Encar или KB CHACHACHA — цена авто, логистика и услуга Lux Motors.
+              Моментальный расчёт до Алматы: Encar или KB CHACHACHA — цена авто и логистика.
             </p>
             <div className="flex flex-wrap gap-3">
               <Button size="lg" onClick={() => document.getElementById("calculator")?.scrollIntoView({ behavior: "smooth" })}>
@@ -405,10 +408,6 @@ export default function Home() {
                         <span>Логистика:</span>
                         <span className="font-medium text-zinc-900">{formatKzt(car.logistics)}</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span>Услуга Lux Motors:</span>
-                        <span className="font-medium text-zinc-900">{formatKzt(car.serviceFee)}</span>
-                      </div>
                       <div className="flex items-center justify-between border-t border-zinc-200 pt-2">
                         <span className="font-medium text-zinc-900">Итого до Алматы:</span>
                         <span className="font-semibold text-[#C90C07]">{formatKzt(car.almatyTotal)}</span>
@@ -521,10 +520,6 @@ export default function Home() {
                               <span className="mt-0.5 block text-xs font-normal text-zinc-500">{formatKzt(car.logistics)}</span>
                             </span>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="shrink-0 text-sm text-zinc-600">Услуга Lux Motors:</span>
-                            <span className="text-right font-medium text-zinc-900">{formatKzt(car.serviceFee)}</span>
-                          </div>
                         </div>
                       </div>
 
@@ -621,10 +616,6 @@ export default function Home() {
                     <div style={{ display: "flex", justifyContent: "space-between", margin: "6px 0 2px" }}>
                       <span>Логистика:</span>
                       <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.logistics)} ₸</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", margin: "2px 0" }}>
-                      <span>Услуга Lux Motors:</span>
-                      <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.serviceFee)} ₸</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", margin: "8px 0 0", paddingTop: "6px", borderTop: "2px solid #C90C07", fontWeight: "bold", fontSize: "12px" }}>
                       <span>Итого до Алматы:</span>
