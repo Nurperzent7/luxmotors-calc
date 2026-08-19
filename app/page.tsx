@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { motion } from "framer-motion"
 import {
   ArrowRight,
@@ -72,6 +72,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [activeImage, setActiveImage] = useState(0)
+  const thumbsRef = useRef<HTMLDivElement>(null)
+  const thumbsDrag = useRef({ active: false, moved: false, startX: 0, startLeft: 0 })
   const [car, setCar] = useState<CarResult | null>(null)
 
   const [usdKztRate, setUsdKztRate] = useState(467)
@@ -96,6 +98,18 @@ export default function Home() {
       document.documentElement.setAttribute("data-embed", "1")
     }
   }, [])
+
+  useEffect(() => {
+    const el = thumbsRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth) return
+      e.preventDefault()
+      el.scrollLeft += e.deltaY + e.deltaX
+    }
+    el.addEventListener("wheel", onWheel, { passive: false })
+    return () => el.removeEventListener("wheel", onWheel)
+  }, [car])
 
   const importOneEncar = async (vehicleId: string) => {
     const saveRes = await fetch("/api/import-encar", {
@@ -608,18 +622,39 @@ export default function Home() {
                         <Button variant="subtle" className="shrink-0" onClick={() => setActiveImage((prev) => Math.max(0, prev - 1))}>
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
+                        <div
+                          ref={thumbsRef}
+                          className="flex min-w-0 flex-1 gap-2 overflow-x-auto overflow-y-hidden touch-pan-x [scrollbar-width:thin]"
+                          onPointerDown={(e) => {
+                            const el = thumbsRef.current
+                            if (!el) return
+                            thumbsDrag.current = { active: true, moved: false, startX: e.clientX, startLeft: el.scrollLeft }
+                          }}
+                          onPointerMove={(e) => {
+                            if (!thumbsDrag.current.active || !thumbsRef.current) return
+                            const dx = e.clientX - thumbsDrag.current.startX
+                            if (Math.abs(dx) > 4) {
+                              thumbsDrag.current.moved = true
+                              thumbsRef.current.scrollLeft = thumbsDrag.current.startLeft - dx
+                            }
+                          }}
+                          onPointerUp={() => { thumbsDrag.current.active = false }}
+                          onPointerLeave={() => { thumbsDrag.current.active = false }}
+                        >
                           {images.map((img, i) => (
                             <button
                               key={`${img}-${i}`}
                               type="button"
-                              onClick={() => setActiveImage(i)}
+                              onClick={() => {
+                                if (thumbsDrag.current.moved) return
+                                setActiveImage(i)
+                              }}
                               className={`h-14 w-20 shrink-0 overflow-hidden rounded-xl border ${i === activeImage ? "border-[#C90C07]" : "border-zinc-200"}`}
                             >
                               <img
                                 src={`/api/image?url=${encodeURIComponent(img)}`}
                                 alt={`car-${i}`}
-                                className="h-full w-full object-cover"
+                                className="h-full w-full object-cover pointer-events-none"
                               />
                             </button>
                           ))}
