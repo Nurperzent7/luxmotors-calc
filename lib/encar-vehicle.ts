@@ -29,6 +29,26 @@ function photoUrl(path: string): string {
   return `https://ci.encar.com/${p}`
 }
 
+/** Encar API отдаёт photos вперемешку; на сайте они идут по коду 001, 002, 003… */
+export function sortEncarPhotoUrls(
+  photos: Array<{ path?: string; code?: string | number }>
+): string[] {
+  return photos
+    .filter((p) => p?.path)
+    .slice()
+    .sort((a, b) => {
+      const na = Number(String(a.code ?? "").replace(/\D/g, ""))
+      const nb = Number(String(b.code ?? "").replace(/\D/g, ""))
+      const ca = Number.isFinite(na) && String(a.code ?? "").trim() !== "" ? na : 9999
+      const cb = Number.isFinite(nb) && String(b.code ?? "").trim() !== "" ? nb : 9999
+      if (ca !== cb) return ca - cb
+      return String(a.path).localeCompare(String(b.path || ""))
+    })
+    .map((p) => photoUrl(String(p.path)))
+    .filter(Boolean)
+    .slice(0, 20)
+}
+
 function yearFromEncar(yearMonth: unknown, formYear: unknown): number {
   const form = Number(String(formYear || "").slice(0, 4))
   if (form >= 1990 && form <= 2100) return form
@@ -67,10 +87,7 @@ export async function fetchEncarVehicleForCalc(vehicleId: string): Promise<Encar
   const liters = displacement > 0 ? (displacement / 1000).toFixed(1) : "2.0"
   const priceMan = Number(veh?.advertisement?.price) || 0
   const photos = Array.isArray(veh?.photos) ? veh.photos : []
-  const images = photos
-    .map((p: { path?: string }) => (p?.path ? photoUrl(p.path) : ""))
-    .filter(Boolean)
-    .slice(0, 20)
+  const images = sortEncarPhotoUrls(photos)
 
   let bodyDamage: EncarCalcVehicle["bodyDamage"] = []
   let insuranceRecords: EncarCalcVehicle["insuranceRecords"] = []
