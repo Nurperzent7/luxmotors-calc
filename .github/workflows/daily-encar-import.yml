@@ -13,19 +13,26 @@ jobs:
         env:
           CALC_URL: ${{ secrets.CALC_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CALC_IMPORT_SECRET: ${{ secrets.CALC_IMPORT_SECRET }}
         run: |
-          set -e
+          set -euo pipefail
           BASE="${CALC_URL:-https://luxmotors-calc.vercel.app}"
+          SECRET="${CRON_SECRET:-$CALC_IMPORT_SECRET}"
+          if [ -z "$SECRET" ]; then
+            echo "Set repo secret CRON_SECRET or CALC_IMPORT_SECRET"
+            exit 1
+          fi
           remaining=100
           i=0
           while [ "$remaining" -gt 0 ] && [ "$i" -lt 20 ]; do
             i=$((i+1))
             resp=$(curl -sS -X POST "$BASE/api/daily-import?batch=8" \
-              -H "Authorization: Bearer $CRON_SECRET" \
+              -H "Authorization: Bearer $SECRET" \
+              -H "X-Calc-Secret: $SECRET" \
               -H "Content-Type: application/json")
             echo "$resp"
-            remaining=$(echo "$resp" | sed -n 's/.*"remainingToday":\s*\([0-9]*\).*/\1/p' | head -1)
-            imported=$(echo "$resp" | sed -n 's/.*"imported":\s*\([0-9]*\).*/\1/p' | head -1)
+            remaining=$(echo "$resp" | sed -n 's/.*"remainingToday": *\([0-9]*\).*/\1/p' | head -1)
+            imported=$(echo "$resp" | sed -n 's/.*"imported": *\([0-9]*\).*/\1/p' | head -1)
             remaining=${remaining:-0}
             imported=${imported:-0}
             if [ "$imported" = "0" ]; then

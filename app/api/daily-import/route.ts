@@ -1,3 +1,4 @@
+import { after } from "next/server"
 import { NextRequest, NextResponse } from "next/server"
 import { profilesFromCatalog, matchesCatalogModel, extractEncarId } from "@/lib/catalog-match"
 import { MIN_KRW_FOR_CATALOG } from "@/lib/delivery"
@@ -19,7 +20,7 @@ type CatalogVehicle = {
 
 async function fetchCatalog(): Promise<CatalogVehicle[]> {
   const all: CatalogVehicle[] = []
-  for (let page = 0; page < 20; page++) {
+  for (let page = 0; page < 30; page++) {
     const res = await fetch(`${CATALOG_API}/api/vehicles?page=${page}&size=100`, { cache: "no-store" })
     if (!res.ok) break
     const data = await res.json()
@@ -39,13 +40,18 @@ function isTodayAlmaty(iso?: string): boolean {
   return almaty.toISOString().slice(0, 10) === now.toISOString().slice(0, 10)
 }
 
+function cronSecret(): string {
+  return process.env.CRON_SECRET || process.env.CALC_IMPORT_SECRET || ""
+}
+
 function authorized(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET || process.env.CALC_IMPORT_SECRET || ""
+  const secret = cronSecret()
   if (!secret) return process.env.NODE_ENV !== "production"
   const header = req.headers.get("authorization") || ""
   const bearer = header.replace(/^Bearer\s+/i, "").trim()
+  const calcHeader = req.headers.get("x-calc-secret") || ""
   const query = req.nextUrl.searchParams.get("secret") || ""
-  return bearer === secret || query === secret
+  return bearer === secret || calcHeader === secret || query === secret
 }
 
 export async function GET(req: NextRequest) {
@@ -58,12 +64,10 @@ export async function POST(req: NextRequest) {
   }
 
   const batch = Math.min(Math.max(Number(req.nextUrl.searchParams.get("batch")) || 8, 1), 15)
+  const depth = Math.max(Number(req.nextUrl.searchParams.get("depth")) || 0, 0)
   const catalog = await fetchCatalog()
   const existingIds = new Set(
     catalog.map((v) => extractEncarId(String(v.lotNumber || ""))).filter(Boolean) as string[]
-  )
-  const existingVins = new Set(
-    catalog.map((v) => String(v.vin || "").trim().toUpperCase()).filter(Boolean)
   )
   const importedToday = catalog.filter((v) => isTodayAlmaty(v.createdAt)).length
   const remainingToday = Math.max(DAILY_TARGET - importedToday, 0)
@@ -153,15 +157,32 @@ export async function POST(req: NextRequest) {
         skipped.push({ id, reason: "duplicate" })
         continue
       }
-          const createdAt = data?.vehicle?.createdAt
-          if (createdAt && !isTodayAlmaty(createdAt)) {
-            skipped.push({ id, reason: "already_in_catalog" })
-            continue
-          }
-          imported.push(id)
+      const createdAt = data?.vehicle?.createdAt
+      if (createdAt && !isTodayAlmaty(createdAt)) {
+        skipped.push({ id, reason: "already_in_catalog" })
+        continue
+      }
+      imported.push(id)
     } catch (e) {
       skipped.push({ id, reason: e instanceof Error ? e.message : "error" })
     }
+  }
+
+  const remainingAfter = Math.max(DAILY_TARGET - importedToday - imported.length, 0)
+  if (remainingAfter > 0 && imported.length > 0 && depth < 18) {
+    const secret = cronSecret()
+    const next = new URL("/api/daily-import", origin)
+    next.searchParams.set("batch", String(batch))
+    next.searchParams.set("depth", String(depth + 1))
+    after(async () => {
+      await fetch(next, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "X-Calc-Secret": secret,
+        },
+      }).catch(() => undefined)
+    })
   }
 
   return NextResponse.json({
@@ -171,7 +192,8 @@ export async function POST(req: NextRequest) {
     importedIds: imported,
     skippedItems: skipped.slice(0, 20),
     importedToday: importedToday + imported.length,
-    remainingToday: Math.max(DAILY_TARGET - importedToday - imported.length, 0),
+    remainingToday: remainingAfter,
+    chained: remainingAfter > 0 && imported.length > 0 && depth < 18,
     profiles: profiles.length,
     candidates: candidates.length,
   })
