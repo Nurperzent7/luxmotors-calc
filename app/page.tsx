@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { extractEncarVehicleIds, isEncarSearchUrl } from "@/lib/encar-list"
-import { deliveryUsdByKrw } from "@/lib/delivery"
+import { DELIVERY_BY_AGREEMENT, deliveryUsdByKrw, isDeliveryByAgreement } from "@/lib/delivery"
 
 const WHATSAPP_URL =
   "https://wa.me/821021846777?text=" +
@@ -62,6 +62,11 @@ const formatKzt = (value: number) =>
 
 const formatKrw = (value: number) =>
   `${new Intl.NumberFormat("ko-KR").format(value)} ₩`
+
+function logisticsLabel(car: CarResult) {
+  if (isDeliveryByAgreement(car.priceKrw)) return DELIVERY_BY_AGREEMENT
+  return formatKzt(car.logistics)
+}
 
 export default function Home() {
   // Always false on first render (SSR + hydrate) to avoid mismatched DOM / dead clicks in iframe
@@ -499,7 +504,7 @@ export default function Home() {
                 <div>
                   <label className="text-xs text-zinc-500">Доставка до Алматы</label>
                   <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700">
-                    5–30 млн ₩ → $1650 · 30–40 млн ₩ → $1000 · от 40 млн ₩ → бесплатно
+                    5–30 млн ₩ → $1650 · 30–40 млн ₩ → $1000 · от 40 млн ₩ → По договоренности
                   </p>
                 </div>
                 <div>
@@ -561,7 +566,7 @@ export default function Home() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span>Логистика:</span>
-                        <span className="font-medium text-zinc-900">{formatKzt(car.logistics)}</span>
+                        <span className="font-medium text-zinc-900">{logisticsLabel(car)}</span>
                       </div>
                       <div className="flex items-center justify-between border-t border-zinc-200 pt-2">
                         <span className="font-medium text-zinc-900">Итого до Алматы:</span>
@@ -692,8 +697,12 @@ export default function Home() {
                           <div className="flex items-center justify-between gap-3">
                             <span className="shrink-0 text-sm text-zinc-600">Логистика:</span>
                             <span className="text-right font-medium text-zinc-900">
-                              ${new Intl.NumberFormat("en-US").format(car.logisticsUsd)}
-                              <span className="mt-0.5 block text-xs font-normal text-zinc-500">{formatKzt(car.logistics)}</span>
+                              {isDeliveryByAgreement(car.priceKrw)
+                                ? DELIVERY_BY_AGREEMENT
+                                : `$${new Intl.NumberFormat("en-US").format(car.logisticsUsd)}`}
+                              {!isDeliveryByAgreement(car.priceKrw) && (
+                                <span className="mt-0.5 block text-xs font-normal text-zinc-500">{formatKzt(car.logistics)}</span>
+                              )}
                             </span>
                           </div>
                         </div>
@@ -791,7 +800,7 @@ export default function Home() {
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", margin: "6px 0 2px" }}>
                       <span>Логистика:</span>
-                      <span style={{ fontWeight: "500" }}>{new Intl.NumberFormat("ru-RU").format(car.logistics)} ₸</span>
+                      <span style={{ fontWeight: "500" }}>{isDeliveryByAgreement(car.priceKrw) ? DELIVERY_BY_AGREEMENT : `${new Intl.NumberFormat("ru-RU").format(car.logistics)} ₸`}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", margin: "8px 0 0", paddingTop: "6px", borderTop: "2px solid #C90C07", fontWeight: "bold", fontSize: "12px" }}>
                       <span>Итого до Алматы:</span>

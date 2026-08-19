@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { logisticsDescriptionLine } from "@/lib/delivery"
 
 export const runtime = "nodejs"
 
@@ -144,7 +145,7 @@ export async function POST(req: NextRequest) {
         priceKRW ? `Авто: ${new Intl.NumberFormat("ru-RU").format(priceKRW)} ₩` : null,
         priceUsd ? `Авто: $${new Intl.NumberFormat("en-US").format(priceUsd)}` : null,
         carPriceKzt ? `Авто: ${new Intl.NumberFormat("ru-RU").format(carPriceKzt)} ₸` : null,
-        logistics ? `Логистика: ${new Intl.NumberFormat("ru-RU").format(logistics)} ₸` : null,
+        logisticsDescriptionLine(priceKRW, logistics),
         serviceFee > 0
           ? `Услуга Lux Motors: ${new Intl.NumberFormat("ru-RU").format(serviceFee)} ₸`
           : null,
