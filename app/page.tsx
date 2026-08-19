@@ -20,6 +20,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { extractEncarVehicleIds, isEncarSearchUrl } from "@/lib/encar-list"
+import { deliveryUsdByKrw } from "@/lib/delivery"
 
 const WHATSAPP_URL =
   "https://wa.me/821021846777?text=" +
@@ -77,6 +79,8 @@ export default function Home() {
   const [deliveryUsd, setDeliveryUsd] = useState(2000)
   const [catalogSave, setCatalogSave] = useState<"idle" | "saving" | "ok" | "error">("idle")
   const [catalogSaveMsg, setCatalogSaveMsg] = useState("")
+  const [importLimit, setImportLimit] = useState(10)
+  const [batchProgress, setBatchProgress] = useState("")
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -93,6 +97,88 @@ export default function Home() {
     }
   }, [])
 
+  const importOneEncar = async (vehicleId: string) => {
+    const saveRes = await fetch("/api/import-encar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vehicleId,
+        usdKztRate,
+        krwUsdRate,
+        deliveryUsd,
+      }),
+    })
+    const saveData = await saveRes.json().catch(() => ({}))
+    if (!saveRes.ok) {
+      throw new Error(
+        typeof saveData?.error === "string" ? saveData.error : `Не удалось сохранить (${saveRes.status})`
+      )
+    }
+    return saveData
+  }
+
+  const handleBatchEncarImport = async (ids: string[]) => {
+    setLoading(true)
+    setCatalogSave("saving")
+    setCatalogSaveMsg("")
+    let ok = 0
+    let failed = 0
+    let lastCar: CarResult | null = null
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i]
+        setBatchProgress(`Загружаем ${i + 1} из ${ids.length}…`)
+        try {
+          const saveData = await importOneEncar(id)
+          if (saveData?.skipped) {
+            failed += 1
+            continue
+          }
+          ok += 1
+          if (saveData?.car) {
+            lastCar = {
+              title: saveData.car.title,
+              year: saveData.car.year,
+              mileage: saveData.car.mileage,
+              price: formatKrw(saveData.car.priceKrw),
+              priceKrw: saveData.car.priceKrw,
+              images: saveData.car.images,
+              carPriceUsd: saveData.car.carPriceUsd,
+              carPriceKzt: saveData.car.carPriceKzt,
+              logisticsUsd: saveData.car.logisticsUsd,
+              logistics: saveData.car.logistics,
+              serviceFeeUsd: 0,
+              serviceFee: 0,
+              almatyTotal: saveData.car.almatyTotal,
+              selectedEngine: saveData.car.selectedEngine,
+            }
+          }
+        } catch {
+          failed += 1
+        }
+      }
+      if (lastCar) {
+        setCar(lastCar)
+        setActiveImage(0)
+      }
+      if (ok === 0) {
+        setCatalogSave("error")
+        setCatalogSaveMsg("Не удалось загрузить авто в каталог")
+        setError("Проверьте ссылки Encar и попробуйте ещё раз.")
+      } else {
+        setCatalogSave("ok")
+        setCatalogSaveMsg(
+          failed > 0
+            ? `В каталог загружено ${ok} из ${ids.length} (ошибок: ${failed})`
+            : `В каталог загружено ${ok} авто с Encar`
+        )
+      }
+    } finally {
+      setBatchProgress("")
+      setLoading(false)
+    }
+  }
+
   const handleCalculate = async () => {
     setError("")
     const encarLink = url.trim()
@@ -100,6 +186,36 @@ export default function Home() {
 
     if (!encarLink && !heydealerLink) {
       setError("Введите ссылку Encar или KB CHACHACHA.")
+      return
+    }
+
+    const pastedIds = extractEncarVehicleIds(encarLink)
+    if (!heydealerLink && (isEncarSearchUrl(encarLink) || pastedIds.length > 1)) {
+      try {
+        setLoading(true)
+        setCatalogSave("saving")
+        setBatchProgress("Собираем объявления Encar…")
+        const idsRes = await fetch("/api/encar-ids", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: encarLink, limit: importLimit }),
+        })
+        const idsData = await idsRes.json().catch(() => ({}))
+        const ids: string[] = Array.isArray(idsData?.ids) ? idsData.ids : pastedIds
+        if (!ids.length) {
+          setLoading(false)
+          setCatalogSave("idle")
+          setBatchProgress("")
+          setError(idsData?.error || "Не найдены объявления Encar.")
+          return
+        }
+        await handleBatchEncarImport(ids)
+      } catch {
+        setLoading(false)
+        setCatalogSave("error")
+        setBatchProgress("")
+        setError("Не удалось получить список с Encar.")
+      }
       return
     }
 
@@ -136,10 +252,11 @@ export default function Home() {
       if (!response.ok) throw new Error(data?.error || "Ошибка расчета")
 
       const krwPrice = Number(String(data.price || "").replace(/[^\d]/g, "")) || 0
+      const autoDelivery = deliveryUsdByKrw(krwPrice)
+      const logisticsUsd = autoDelivery ?? 0
       const carPriceUsd = Math.round(krwPrice / krwUsdRate)
       const carPriceKzt = Math.round(carPriceUsd * usdKztRate)
-      const logisticsUsd = deliveryUsd
-      const logistics = Math.round(deliveryUsd * usdKztRate)
+      const logistics = Math.round(logisticsUsd * usdKztRate)
       const serviceFee = 0
       const serviceFeeUsd = 0
       const almatyTotal = carPriceKzt + logistics
@@ -169,6 +286,13 @@ export default function Home() {
         selectedEngine: `${engine} л`,
       })
       setActiveImage(0)
+      if (autoDelivery === null) {
+        setCatalogSave("idle")
+        setCatalogSaveMsg("")
+        setError("Цена ниже 5 млн ₩ — в каталог не сохраняем.")
+        return
+      }
+      setDeliveryUsd(autoDelivery)
       setCatalogSave("saving")
       setCatalogSaveMsg("")
 
@@ -316,11 +440,16 @@ export default function Home() {
                   <h2 className="text-2xl font-semibold md:text-3xl">Калькулятор стоимости</h2>
                   <Badge className="border-[#C90C07]/20 bg-[#C90C07]/10 text-[#C90C07]">Live Estimate</Badge>
                 </div>
-                <Input
+                <textarea
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  placeholder="Вставьте ссылку Encar"
+                  rows={3}
+                  placeholder="Ссылка Encar на карточку, поиск, или несколько ссылок сразу"
+                  className="flex min-h-[84px] w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-all focus:border-[#C90C07]/50 focus:ring-2 focus:ring-[#C90C07]/15"
                 />
+                <p className="text-xs text-zinc-500">
+                  Карточка — расчёт и сохранение. Поиск Encar или несколько ссылок — загрузка в каталог через калькулятор.
+                </p>
                 <Input
                   value={heydealerUrl}
                   onChange={(e) => setHeydealerUrl(e.target.value)}
@@ -354,18 +483,26 @@ export default function Home() {
                 </div>
 
                 <div>
-                    <label className="text-xs text-zinc-500">Доставка (USD)</label>
-                    <Input
-                      type="number"
-                      value={deliveryUsd}
-                      onChange={(e) => setDeliveryUsd(Number(e.target.value))}
-                      placeholder="2000"
-                    />
-                  </div>
+                  <label className="text-xs text-zinc-500">Доставка до Алматы</label>
+                  <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700">
+                    5–30 млн ₩ → $1650 · 30–40 млн ₩ → $1000 · от 40 млн ₩ → бесплатно
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-500">С поиска взять авто</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={importLimit}
+                    onChange={(e) => setImportLimit(Math.min(30, Math.max(1, Number(e.target.value) || 1)))}
+                    placeholder="10"
+                  />
+                </div>
 
                 {error && <p className="text-sm text-red-600">{error}</p>}
                 {catalogSave === "saving" && (
-                  <p className="text-sm text-zinc-500">Сохраняем в каталог…</p>
+                  <p className="text-sm text-zinc-500">{batchProgress || "Сохраняем в каталог…"}</p>
                 )}
                 {catalogSave === "ok" && (
                   <p className="text-sm text-emerald-600">{catalogSaveMsg}</p>
@@ -382,7 +519,11 @@ export default function Home() {
                   }}
                   disabled={loading}
                 >
-                  {loading ? "Считаем..." : "Рассчитать"}
+                  {loading
+                    ? batchProgress || "Считаем..."
+                    : isEncarSearchUrl(url) || extractEncarVehicleIds(url).length > 1
+                      ? "Загрузить в каталог"
+                      : "Рассчитать"}
                 </Button>
               </CardContent>
             </Card>

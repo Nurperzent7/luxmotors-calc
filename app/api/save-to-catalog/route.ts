@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
 
     const payload = {
       sourceUrl: String(body.sourceUrl || "").trim(),
+      vin: body.vin ? String(body.vin).trim() : null,
       title,
       brand,
       model,

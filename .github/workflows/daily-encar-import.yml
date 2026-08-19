@@ -1,0 +1,35 @@
+name: Daily Encar import
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Import up to 100 cars
+        env:
+          CALC_URL: ${{ secrets.CALC_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -e
+          BASE="${CALC_URL:-https://luxmotors-calc.vercel.app}"
+          remaining=100
+          i=0
+          while [ "$remaining" -gt 0 ] && [ "$i" -lt 20 ]; do
+            i=$((i+1))
+            resp=$(curl -sS -X POST "$BASE/api/daily-import?batch=8" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H "Content-Type: application/json")
+            echo "$resp"
+            remaining=$(echo "$resp" | sed -n 's/.*"remainingToday":\s*\([0-9]*\).*/\1/p' | head -1)
+            imported=$(echo "$resp" | sed -n 's/.*"imported":\s*\([0-9]*\).*/\1/p' | head -1)
+            remaining=${remaining:-0}
+            imported=${imported:-0}
+            if [ "$imported" = "0" ]; then
+              break
+            fi
+            sleep 2
+          done
