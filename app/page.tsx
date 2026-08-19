@@ -86,7 +86,6 @@ export default function Home() {
   const [deliveryUsd, setDeliveryUsd] = useState(2000)
   const [catalogSave, setCatalogSave] = useState<"idle" | "saving" | "ok" | "error">("idle")
   const [catalogSaveMsg, setCatalogSaveMsg] = useState("")
-  const [importLimit, setImportLimit] = useState(10)
   const [batchProgress, setBatchProgress] = useState("")
 
   useEffect(() => {
@@ -217,7 +216,7 @@ export default function Home() {
         const idsRes = await fetch("/api/encar-ids", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: encarLink, limit: importLimit }),
+          body: JSON.stringify({ url: encarLink, limit: 10 }),
         })
         const idsData = await idsRes.json().catch(() => ({}))
         const ids: string[] = Array.isArray(idsData?.ids) ? idsData.ids : pastedIds
@@ -511,17 +510,6 @@ export default function Home() {
                   <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700">
                     5–30 млн ₩ → $1650 · 30–40 млн ₩ → $1000 · от 40 млн ₩ → По договоренности
                   </p>
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-500">С поиска взять авто</label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={importLimit}
-                    onChange={(e) => setImportLimit(Math.min(30, Math.max(1, Number(e.target.value) || 1)))}
-                    placeholder="10"
-                  />
                 </div>
 
                 {error && <p className="text-sm text-red-600">{error}</p>}
