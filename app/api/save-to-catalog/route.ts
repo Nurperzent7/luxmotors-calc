@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { logisticsDescriptionLine } from "@/lib/delivery"
+import { classifyFromSavePayload } from "@/lib/special-vehicle"
 
 export const runtime = "nodejs"
 
@@ -113,6 +114,14 @@ export async function POST(req: NextRequest) {
       ? { brand: String(body.brand), model: String(body.model) }
       : parseBrandModel(title)
     const { brand, model } = normalizeBrandModel(raw.brand, raw.model, title)
+    const classified = classifyFromSavePayload({
+      vehicleType: body.vehicleType,
+      title,
+      brand,
+      model,
+      sourceUrl: String(body.sourceUrl || ""),
+      bodyType: body.bodyType,
+    })
 
     const engine = String(body.selectedEngine || body.engine || "2.0 л")
     const engineVolume = engine.replace(/\s*л\s*$/i, "").trim()
@@ -129,6 +138,11 @@ export async function POST(req: NextRequest) {
       title,
       brand,
       model,
+      vehicleType: classified.vehicleType,
+      bodyType: body.bodyType || classified.bodyType || null,
+      fuel: body.fuel || null,
+      transmission: body.transmission || null,
+      loadCapacity: Number(body.loadCapacity) || null,
       year: Number(body.year) || new Date().getFullYear(),
       mileage: digits(body.mileage),
       engine,

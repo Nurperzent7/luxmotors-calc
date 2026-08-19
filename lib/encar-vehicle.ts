@@ -1,4 +1,5 @@
 import { extractEncarVehicleId, fetchEncarBodyDamage, fetchEncarInsuranceHistory } from "@/lib/encar-inspection"
+import { classifyEncarVehicle, type CatalogVehicleKind } from "@/lib/special-vehicle"
 
 const ENCAR_HEADERS = {
   Accept: "application/json",
@@ -22,6 +23,11 @@ export type EncarCalcVehicle = {
   bodyDamage: Array<{ part: string; status: string; code?: string; layer?: string }>
   insuranceRecords: Array<{ date: string; type: string; amount: number; description: string }>
   insuranceSummary: Record<string, unknown> | null
+  vehicleType: CatalogVehicleKind
+  bodyType?: string
+  fuel?: string
+  transmission?: string
+  loadCapacity?: number
 }
 
 function photoUrl(path: string): string {
@@ -49,6 +55,16 @@ export function sortEncarPhotoUrls(
     .slice(0, 20)
 }
 
+function englishBrand(raw: string): string {
+  const n = String(raw || "").trim()
+  if (/기아/.test(n)) return "Kia"
+  if (/현대/.test(n)) return "Hyundai"
+  if (/제네시스/.test(n)) return "Genesis"
+  if (/쌍용|KG\s*모빌리티/i.test(n)) return "KG Mobility"
+  if (/삼성|르노코리아|르노/.test(n)) return "Renault Korea"
+  return n || "Unknown"
+}
+
 function yearFromEncar(yearMonth: unknown, formYear: unknown): number {
   const form = Number(String(formYear || "").slice(0, 4))
   if (form >= 1990 && form <= 2100) return form
@@ -68,10 +84,11 @@ export async function fetchEncarVehicleForCalc(vehicleId: string): Promise<Encar
   if (!res.ok) throw new Error(`Encar API ${res.status}`)
   const veh = await res.json()
 
-  const brand =
+  const brandRaw =
     String(veh?.category?.manufacturerEnglishName || "").trim() ||
     String(veh?.category?.manufacturerName || "").trim() ||
     "Unknown"
+  const brand = englishBrand(brandRaw)
   const modelParts = [
     veh?.category?.modelGroupEnglishName || veh?.category?.modelGroupName,
     veh?.category?.modelEnglishName || veh?.category?.modelName,
@@ -83,6 +100,7 @@ export async function fetchEncarVehicleForCalc(vehicleId: string): Promise<Encar
   const model = [...new Set(modelParts)].join(" ").trim() || "Unknown"
   const title = `${brand} ${model}`.replace(/\s+/g, " ").trim()
 
+  const classified = classifyEncarVehicle(veh)
   const displacement = Number(veh?.spec?.displacement) || 0
   const liters = displacement > 0 ? (displacement / 1000).toFixed(1) : "2.0"
   const priceMan = Number(veh?.advertisement?.price) || 0
@@ -121,5 +139,10 @@ export async function fetchEncarVehicleForCalc(vehicleId: string): Promise<Encar
     bodyDamage,
     insuranceRecords,
     insuranceSummary,
+    vehicleType: classified.vehicleType,
+    bodyType: classified.bodyType,
+    fuel: classified.fuel,
+    transmission: classified.transmission,
+    loadCapacity: classified.loadCapacity,
   }
 }

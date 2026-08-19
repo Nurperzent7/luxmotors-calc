@@ -8,6 +8,7 @@ import { isHeyDealerUrl, parseHeyDealerUrl } from "@/lib/heydealer"
 import { isKbChachachaUrl, parseKbChachachaUrl } from "@/lib/kbchachacha"
 import { getFirstRegFeeKzt, getUtilFeeKzt } from "@/lib/fees"
 import { extractEncarVehicleId, fetchEncarBodyDamage, fetchEncarInsuranceHistory } from "@/lib/encar-inspection"
+import { classifyEncarVehicle, classifyFromSavePayload, type EncarCatalogClass } from "@/lib/special-vehicle"
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
 
@@ -329,6 +330,7 @@ export async function POST(req: Request) {
     let insuranceSummary: Record<string, unknown> = {}
     let inspectionMeta: Record<string, unknown> = {}
     let encarVehicleId: string | null = null
+    let catalogClass: EncarCatalogClass = { vehicleType: "CAR" }
 
     if (isKbChachachaUrl(url)) {
       const kb = await parseKbChachachaUrl(url)
@@ -489,7 +491,30 @@ export async function POST(req: Request) {
         } catch (e) {
           console.warn("[encar-insurance]", e)
         }
+        try {
+          const vehRes = await fetch(`https://api.encar.com/v1/readside/vehicle/${encarVehicleId}`, {
+            headers: {
+              Accept: "application/json",
+              "User-Agent": "Mozilla/5.0",
+              Referer: `https://fem.encar.com/cars/detail/${encarVehicleId}`,
+            },
+            cache: "no-store",
+          })
+          if (vehRes.ok) {
+            catalogClass = classifyEncarVehicle(await vehRes.json())
+          }
+        } catch (e) {
+          console.warn("[encar-type]", e)
+        }
       }
+    }
+
+    if (catalogClass.vehicleType !== "SPECIAL") {
+      catalogClass = classifyFromSavePayload({
+        vehicleType: catalogClass.vehicleType,
+        title,
+        sourceUrl: url,
+      })
     }
 
     const carPriceKzt = Math.round(krw * 0.36)
@@ -568,6 +593,11 @@ export async function POST(req: Request) {
       insuranceSummary,
       inspectionMeta,
       encarVehicleId,
+      vehicleType: catalogClass.vehicleType,
+      bodyType: catalogClass.bodyType,
+      fuel: catalogClass.fuel,
+      transmission: catalogClass.transmission,
+      loadCapacity: catalogClass.loadCapacity,
     })
   } catch (error) {
     console.log(error)

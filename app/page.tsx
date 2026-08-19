@@ -341,6 +341,11 @@ export default function Home() {
             bodyDamage: Array.isArray(data.bodyDamage) ? data.bodyDamage : [],
             insuranceRecords: Array.isArray(data.insuranceRecords) ? data.insuranceRecords : [],
             insuranceSummary: data.insuranceSummary || null,
+            vehicleType: data.vehicleType,
+            bodyType: data.bodyType,
+            fuel: data.fuel,
+            transmission: data.transmission,
+            loadCapacity: data.loadCapacity,
           }),
         })
         const saveData = await saveRes.json().catch(() => ({}))

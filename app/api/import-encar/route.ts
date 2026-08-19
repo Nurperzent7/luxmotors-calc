@@ -55,6 +55,11 @@ export async function POST(req: NextRequest) {
         bodyDamage: car.bodyDamage,
         insuranceRecords: car.insuranceRecords,
         insuranceSummary: car.insuranceSummary,
+        vehicleType: car.vehicleType,
+        bodyType: car.bodyType,
+        fuel: car.fuel,
+        transmission: car.transmission,
+        loadCapacity: car.loadCapacity,
       }),
     })
 
