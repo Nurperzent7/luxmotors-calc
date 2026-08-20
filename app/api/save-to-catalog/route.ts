@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { logisticsDescriptionLine } from "@/lib/delivery"
+import { excludedFuelReason } from "@/lib/fuel-filter"
+import { authorizedImport } from "@/lib/import-auth"
 import { classifyFromSavePayload } from "@/lib/special-vehicle"
 
 export const runtime = "nodejs"
@@ -101,8 +103,16 @@ function digits(value: unknown): number {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!authorizedImport(req)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await req.json()
-    const secret = process.env.CALC_IMPORT_SECRET || "luxmotors-calc-import-2026"
+    const secret = process.env.CALC_IMPORT_SECRET || process.env.CRON_SECRET || ""
+    if (process.env.VERCEL && !secret) {
+      return NextResponse.json({ error: "CALC_IMPORT_SECRET not configured" }, { status: 500 })
+    }
+    const backendSecret = secret || "luxmotors-calc-import-2026"
     // Locally default to local backend; on Vercel use production site
     const apiBase = (
       process.env.LUXMOTORS_API_URL ||
@@ -114,6 +124,11 @@ export async function POST(req: NextRequest) {
       ? { brand: String(body.brand), model: String(body.model) }
       : parseBrandModel(title)
     const { brand, model } = normalizeBrandModel(raw.brand, raw.model, title)
+    const fuelSkip = excludedFuelReason(body.fuel, title, model, brand)
+    if (fuelSkip) {
+      return NextResponse.json({ skipped: true, reason: fuelSkip }, { status: 200 })
+    }
+
     const classified = classifyFromSavePayload({
       vehicleType: body.vehicleType,
       title,
@@ -184,7 +199,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Calc-Secret": secret,
+        "X-Calc-Secret": backendSecret,
       },
       body: JSON.stringify(payload),
     })

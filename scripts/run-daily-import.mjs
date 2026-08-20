@@ -11,6 +11,7 @@ async function tick() {
     method: "POST",
     headers: {
       Authorization: `Bearer ${SECRET}`,
+      "X-Calc-Secret": SECRET,
       "Content-Type": "application/json",
     },
   })

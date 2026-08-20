@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { deliveryUsdByKrw } from "@/lib/delivery"
+import { excludedFuelReason } from "@/lib/fuel-filter"
+import { authorizedImport, importAuthHeaders } from "@/lib/import-auth"
 import { fetchEncarVehicleForCalc } from "@/lib/encar-vehicle"
 
 export const runtime = "nodejs"
 
 export async function POST(req: NextRequest) {
+  if (!authorizedImport(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
     const body = await req.json()
     const vehicleId = String(body?.vehicleId || body?.url || "").trim()
@@ -16,6 +22,14 @@ export async function POST(req: NextRequest) {
     const krwUsdRate = Number(body?.krwUsdRate) || 1380
 
     const car = await fetchEncarVehicleForCalc(vehicleId)
+    const fuelSkip = excludedFuelReason(car.fuel, car.title, car.model, car.brand)
+    if (fuelSkip) {
+      return NextResponse.json(
+        { skipped: true, reason: fuelSkip, fuel: car.fuel, title: car.title },
+        { status: 200 }
+      )
+    }
+
     const deliveryUsd = deliveryUsdByKrw(car.priceKRW)
     if (deliveryUsd === null) {
       return NextResponse.json(
@@ -31,7 +45,10 @@ export async function POST(req: NextRequest) {
 
     const saveRes = await fetch(new URL("/api/save-to-catalog", req.nextUrl.origin), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...importAuthHeaders(),
+      },
       body: JSON.stringify({
         sourceUrl: car.sourceUrl,
         vin: car.vin,

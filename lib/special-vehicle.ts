@@ -88,7 +88,13 @@ export function classifyEncarVehicle(veh: any): EncarCatalogClass {
     Boolean(veh?.category?.specialManufacturerName) ||
     isSpecialEquipmentText(titleBits)
 
-  if (!isTruck) return { vehicleType: "CAR" }
+  if (!isTruck) {
+    return {
+      vehicleType: "CAR",
+      fuel: mapEncarFuel(veh?.spec?.fuelName),
+      transmission: mapEncarTransmission(veh?.spec?.transmissionName),
+    }
+  }
 
   return {
     vehicleType: "SPECIAL",

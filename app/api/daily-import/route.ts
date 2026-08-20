@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { profilesFromCatalog, matchesCatalogModel, extractEncarId } from "@/lib/catalog-match"
 import { MIN_KRW_FOR_CATALOG } from "@/lib/delivery"
 import { searchEncarListings } from "@/lib/encar-list"
+import { authorizedImport, calcImportSecret, importAuthHeaders } from "@/lib/import-auth"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -41,17 +42,11 @@ function isTodayAlmaty(iso?: string): boolean {
 }
 
 function cronSecret(): string {
-  return process.env.CRON_SECRET || process.env.CALC_IMPORT_SECRET || ""
+  return calcImportSecret()
 }
 
 function authorized(req: NextRequest): boolean {
-  const secret = cronSecret()
-  if (!secret) return process.env.NODE_ENV !== "production"
-  const header = req.headers.get("authorization") || ""
-  const bearer = header.replace(/^Bearer\s+/i, "").trim()
-  const calcHeader = req.headers.get("x-calc-secret") || ""
-  const query = req.nextUrl.searchParams.get("secret") || ""
-  return bearer === secret || calcHeader === secret || query === secret
+  return authorizedImport(req)
 }
 
 export async function GET(req: NextRequest) {
@@ -90,8 +85,9 @@ export async function POST(req: NextRequest) {
   const want = Math.min(batch, remainingToday)
   const candidates: string[] = []
   const seen = new Set<string>(existingIds)
+  const poolTarget = want * 10
 
-  for (let offset = 0; offset < 80 && candidates.length < want * 4; offset += 20) {
+  for (let offset = 0; offset < 200 && candidates.length < poolTarget; offset += 20) {
     for (const profile of profiles) {
       const hits = await searchEncarListings({
         manufacturerKo: profile.koManufacturer,
@@ -105,30 +101,9 @@ export async function POST(req: NextRequest) {
         if (!matchesCatalogModel(hit.model, profile.family)) continue
         seen.add(hit.id)
         candidates.push(hit.id)
-        if (candidates.length >= want * 4) break
+        if (candidates.length >= poolTarget) break
       }
-      if (candidates.length >= want * 4) break
-    }
-  }
-
-  if (candidates.length < want) {
-    for (let offset = 0; offset < 40 && candidates.length < want * 3; offset += 20) {
-      for (const profile of profiles) {
-        const hits = await searchEncarListings({
-          manufacturerKo: profile.koManufacturer,
-          carType: profile.carType,
-          offset,
-          limit: 20,
-        })
-        for (const hit of hits) {
-          if (seen.has(hit.id)) continue
-          if (hit.priceKRW < MIN_KRW_FOR_CATALOG) continue
-          seen.add(hit.id)
-          candidates.push(hit.id)
-          if (candidates.length >= want * 3) break
-        }
-        if (candidates.length >= want * 3) break
-      }
+      if (candidates.length >= poolTarget) break
     }
   }
 
@@ -141,7 +116,10 @@ export async function POST(req: NextRequest) {
     try {
       const res = await fetch(new URL("/api/import-encar", origin), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...importAuthHeaders(),
+        },
         body: JSON.stringify({ vehicleId: id }),
       })
       const data = await res.json().catch(() => ({}))
