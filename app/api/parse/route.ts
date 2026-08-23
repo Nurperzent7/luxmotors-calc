@@ -357,7 +357,19 @@ export async function POST(req: Request) {
     } else {
       encarVehicleId = extractEncarVehicleId(String(url))
       if (encarVehicleId) {
-        const car = await fetchEncarVehicleForCalc(encarVehicleId)
+        let car
+        try {
+          car = await fetchEncarVehicleForCalc(encarVehicleId)
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Encar parse error"
+          if (msg.includes("404")) {
+            return NextResponse.json(
+              { error: "Объявление Encar не найдено или снято с продажи" },
+              { status: 404 }
+            )
+          }
+          throw e
+        }
         title = car.title
         year = car.year
         mileage =
