@@ -355,6 +355,9 @@ export default function Home() {
               ? saveData.error
               : `Не удалось сохранить в каталог (${saveRes.status})`
           )
+        } else if (saveData?.skipped) {
+          setCatalogSave("idle")
+          setCatalogSaveMsg("")
         } else {
           setCatalogSave("ok")
           setCatalogSaveMsg("Авто сохранено в каталог")
