@@ -21,9 +21,19 @@ export function extractEncarVehicleIds(text: string): string[] {
   return [...ids]
 }
 
+export function isEncarDetailUrl(url: string): boolean {
+  const u = String(url || "")
+  return (
+    /encar\.com\/cars\/detail\/\d+/i.test(u) ||
+    /encar\.com\/cars\/report\/inspect\/\d+/i.test(u)
+  )
+}
+
 export function isEncarSearchUrl(url: string): boolean {
   const u = String(url || "").toLowerCase()
   if (!u.includes("encar.com")) return false
+  // Listing clicks add pageid=fc_carsearch to detail URLs — not a search page
+  if (isEncarDetailUrl(url)) return false
   return (
     u.includes("/cars/search") ||
     u.includes("carsearchlist") ||
@@ -125,7 +135,7 @@ export async function resolveEncarVehicleIds(
 ): Promise<{ ids: string[]; query: string | null }> {
   const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 30)
   const fromText = extractEncarVehicleIds(input)
-  if (fromText.length > 0 && !isEncarSearchUrl(input)) {
+  if (fromText.length > 0 && (isEncarDetailUrl(input) || !isEncarSearchUrl(input))) {
     return { ids: fromText.slice(0, safeLimit), query: null }
   }
 
