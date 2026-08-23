@@ -22,6 +22,7 @@ import { Select } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { extractEncarVehicleIds, isEncarSearchUrl } from "@/lib/encar-list"
 import { DELIVERY_BY_AGREEMENT, deliveryUsdByKrw, isDeliveryByAgreement } from "@/lib/delivery"
+import { ServerMemoryAlert } from "@/components/ServerMemoryAlert"
 
 const WHATSAPP_URL =
   "https://wa.me/821021846777?text=" +
@@ -403,6 +404,7 @@ export default function Home() {
 
   return (
     <main className={`relative overflow-x-hidden bg-[#F7F7F8] text-zinc-900 ${embed ? "embed-mode min-h-0" : "min-h-screen"}`}>
+      <ServerMemoryAlert />
       {!embed && (
         <div className="marketing-block pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_at_top,_rgba(201,12,7,0.12),_transparent_60%)]" />
       )}
