@@ -8,7 +8,8 @@ import { isHeyDealerUrl, parseHeyDealerUrl } from "@/lib/heydealer"
 import { isKbChachachaUrl, parseKbChachachaUrl } from "@/lib/kbchachacha"
 import { getFirstRegFeeKzt, getUtilFeeKzt } from "@/lib/fees"
 import { extractEncarVehicleId, fetchEncarBodyDamage, fetchEncarInsuranceHistory } from "@/lib/encar-inspection"
-import { classifyEncarVehicle, classifyFromSavePayload, type EncarCatalogClass } from "@/lib/special-vehicle"
+import { fetchEncarVehicleForCalc } from "@/lib/encar-vehicle"
+import { classifyFromSavePayload, type EncarCatalogClass } from "@/lib/special-vehicle"
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
 
@@ -354,158 +355,153 @@ export async function POST(req: Request) {
       finalImages = heydealer.images
       source = "heydealer"
     } else {
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0",
-        },
-      })
-
-      const html = await response.text()
-      const $ = cheerio.load(html)
-
-      const rawTitle =
-        $("meta[property='og:title']").attr("content") ||
-        $("title").text()
-
-      const translated = await translate(rawTitle, {
-        from: "ko",
-        to: "en",
-      })
-
-      title = translated.text
-        .replace(/Gyeonggi Used Car.*/i, "")
-        .replace(/Sell My Car/gi, "")
-        .replace(/Buy My Car/gi, "")
-        .replace(/Used Car/gi, "")
-        .trim()
-
-      const pageText = $("body").text()
-      const priceMatch = pageText.match(/([\d,]+)\s*만원/)
-
-      if (priceMatch) {
-        krw =
-          Number(priceMatch[1].replace(/,/g, "")) * 10000
-      }
-
-      const mileageMatch = pageText.match(/\b[\d,]+\s?km\b/i)
-      mileage = mileageMatch ? mileageMatch[0] : "Unknown"
-
-      const yearMatch = pageText.match(/\d{2}\/\d{2}식/)
-      year = 2020
-
-      if (yearMatch) {
-        const shortYear = Number(yearMatch[0].split("/")[0])
-        year = shortYear >= 30 ? 1900 + shortYear : 2000 + shortYear
-      }
-
-      // Уникальные фото Encar: один кадр = один ключ, берём лучшее качество
-      const imageByKey = new Map<string, string>()
-
-      const normalizeImageUrl = (src: string) => {
-        let fullUrl = src.startsWith("http")
-          ? src
-          : src.startsWith("//")
-            ? `https:${src}`
-            : src
-        fullUrl = fullUrl.replace(/&amp;/g, "&").trim()
-        return fullUrl
-      }
-
-      const photoKey = (url: string) => {
-        const match = url.match(/(\d+_\d+)\.(jpg|jpeg|png|webp)/i)
-        if (match) return match[1].toLowerCase()
-        return url.split("?")[0].toLowerCase()
-      }
-
-      const qualityScore = (url: string) => {
-        let score = 0
-        const rh = Number(url.match(/[?&]rh=(\d+)/i)?.[1] || 0)
-        const cw = Number(url.match(/[?&]cw=(\d+)/i)?.[1] || 0)
-        score += rh + cw
-        if (/[?&]t=\d+/i.test(url)) score += 50
-        if (!url.includes("wtmk")) score += 10
-        return score
-      }
-
-      const addImage = (src?: string | null) => {
-        if (!src) return
-        const fullUrl = normalizeImageUrl(src)
-        const valid =
-          (fullUrl.includes(".jpg") ||
-            fullUrl.includes(".jpeg") ||
-            fullUrl.includes(".png") ||
-            fullUrl.includes(".webp")) &&
-          fullUrl.includes("carpicture") &&
-          !fullUrl.includes("logo") &&
-          !fullUrl.includes("icon") &&
-          !fullUrl.includes("banner") &&
-          !fullUrl.includes("blank")
-
-        if (!valid) return
-
-        const key = photoKey(fullUrl)
-        const prev = imageByKey.get(key)
-        if (!prev || qualityScore(fullUrl) > qualityScore(prev)) {
-          imageByKey.set(key, fullUrl)
-        }
-      }
-
-      $("img").each((_, el) => {
-        addImage($(el).attr("src"))
-        addImage($(el).attr("data-src"))
-        addImage($(el).attr("data-original"))
-        addImage($(el).attr("data-lazy"))
-      })
-
-      const bgMatches =
-        html.match(/https?:\/\/[^"' )\]]+\.(jpg|jpeg|png|webp)[^"' )\]]*/gi) || []
-      bgMatches.forEach((img) => addImage(img))
-
-      const jsonMatches =
-        html.match(/https?:\\\/\\\/ci\.encar\.com\\\/carpicture[^"'\\\s]+/gi) || []
-      jsonMatches.forEach((raw) => {
-        addImage(raw.replace(/\\\//g, "/").replace(/\\u0026/g, "&"))
-      })
-
-      finalImages = Array.from(imageByKey.values())
-        .sort((a, b) => {
-          const numA = Number(a.match(/_(\d+)\.(jpg|jpeg|png|webp)/i)?.[1] || 0)
-          const numB = Number(b.match(/_(\d+)\.(jpg|jpeg|png|webp)/i)?.[1] || 0)
-          return numA - numB
-        })
-        .slice(0, 20)
-
       encarVehicleId = extractEncarVehicleId(String(url))
       if (encarVehicleId) {
+        const car = await fetchEncarVehicleForCalc(encarVehicleId)
+        title = car.title
+        year = car.year
+        mileage =
+          car.mileage > 0
+            ? `${new Intl.NumberFormat("ru-RU").format(car.mileage)} km`
+            : "Unknown"
+        krw = car.priceKRW
+        finalImages = car.images
+        bodyDamage = car.bodyDamage
+        insuranceRecords = car.insuranceRecords
+        insuranceSummary = car.insuranceSummary || {}
+        catalogClass = {
+          vehicleType: car.vehicleType,
+          bodyType: car.bodyType,
+          fuel: car.fuel,
+          transmission: car.transmission,
+          loadCapacity: car.loadCapacity,
+        }
         try {
           const insp = await fetchEncarBodyDamage(encarVehicleId)
-          bodyDamage = insp.bodyDamage
           inspectionMeta = insp.inspectionMeta as Record<string, unknown>
         } catch (e) {
           console.warn("[encar-inspection]", e)
         }
-        try {
-          const hist = await fetchEncarInsuranceHistory(encarVehicleId)
-          insuranceRecords = hist.insuranceRecords
-          insuranceSummary = hist.insuranceSummary as Record<string, unknown>
-        } catch (e) {
-          console.warn("[encar-insurance]", e)
+      } else {
+        const response = await fetch(url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0",
+          },
+        })
+
+        const html = await response.text()
+        const $ = cheerio.load(html)
+
+        const rawTitle =
+          $("meta[property='og:title']").attr("content") ||
+          $("title").text()
+
+        const translated = await translate(rawTitle, {
+          from: "ko",
+          to: "en",
+        })
+
+        title = translated.text
+          .replace(/Gyeonggi Used Car.*/i, "")
+          .replace(/Sell My Car/gi, "")
+          .replace(/Buy My Car/gi, "")
+          .replace(/Used Car/gi, "")
+          .trim()
+
+        const pageText = $("body").text()
+        const priceMatch = pageText.match(/([\d,]+)\s*만원/)
+
+        if (priceMatch) {
+          krw =
+            Number(priceMatch[1].replace(/,/g, "")) * 10000
         }
-        try {
-          const vehRes = await fetch(`https://api.encar.com/v1/readside/vehicle/${encarVehicleId}`, {
-            headers: {
-              Accept: "application/json",
-              "User-Agent": "Mozilla/5.0",
-              Referer: `https://fem.encar.com/cars/detail/${encarVehicleId}`,
-            },
-            cache: "no-store",
-          })
-          if (vehRes.ok) {
-            catalogClass = classifyEncarVehicle(await vehRes.json())
+
+        const mileageMatch = pageText.match(/\b[\d,]+\s?km\b/i)
+        mileage = mileageMatch ? mileageMatch[0] : "Unknown"
+
+        const yearMatch = pageText.match(/\d{2}\/\d{2}식/)
+        year = 2020
+
+        if (yearMatch) {
+          const shortYear = Number(yearMatch[0].split("/")[0])
+          year = shortYear >= 30 ? 1900 + shortYear : 2000 + shortYear
+        }
+
+        const imageByKey = new Map<string, string>()
+
+        const normalizeImageUrl = (src: string) => {
+          let fullUrl = src.startsWith("http")
+            ? src
+            : src.startsWith("//")
+              ? `https:${src}`
+              : src
+          fullUrl = fullUrl.replace(/&amp;/g, "&").trim()
+          return fullUrl
+        }
+
+        const photoKey = (url: string) => {
+          const match = url.match(/(\d+_\d+)\.(jpg|jpeg|png|webp)/i)
+          if (match) return match[1].toLowerCase()
+          return url.split("?")[0].toLowerCase()
+        }
+
+        const qualityScore = (url: string) => {
+          let score = 0
+          const rh = Number(url.match(/[?&]rh=(\d+)/i)?.[1] || 0)
+          const cw = Number(url.match(/[?&]cw=(\d+)/i)?.[1] || 0)
+          score += rh + cw
+          if (/[?&]t=\d+/i.test(url)) score += 50
+          if (!url.includes("wtmk")) score += 10
+          return score
+        }
+
+        const addImage = (src?: string | null) => {
+          if (!src) return
+          const fullUrl = normalizeImageUrl(src)
+          const valid =
+            (fullUrl.includes(".jpg") ||
+              fullUrl.includes(".jpeg") ||
+              fullUrl.includes(".png") ||
+              fullUrl.includes(".webp")) &&
+            fullUrl.includes("carpicture") &&
+            !fullUrl.includes("logo") &&
+            !fullUrl.includes("icon") &&
+            !fullUrl.includes("banner") &&
+            !fullUrl.includes("blank")
+
+          if (!valid) return
+
+          const key = photoKey(fullUrl)
+          const prev = imageByKey.get(key)
+          if (!prev || qualityScore(fullUrl) > qualityScore(prev)) {
+            imageByKey.set(key, fullUrl)
           }
-        } catch (e) {
-          console.warn("[encar-type]", e)
         }
+
+        $("img").each((_, el) => {
+          addImage($(el).attr("src"))
+          addImage($(el).attr("data-src"))
+          addImage($(el).attr("data-original"))
+          addImage($(el).attr("data-lazy"))
+        })
+
+        const bgMatches =
+          html.match(/https?:\/\/[^"' )\]]+\.(jpg|jpeg|png|webp)[^"' )\]]*/gi) || []
+        bgMatches.forEach((img) => addImage(img))
+
+        const jsonMatches =
+          html.match(/https?:\\\/\\\/ci\.encar\.com\\\/carpicture[^"'\\\s]+/gi) || []
+        jsonMatches.forEach((raw) => {
+          addImage(raw.replace(/\\\//g, "/").replace(/\\u0026/g, "&"))
+        })
+
+        finalImages = Array.from(imageByKey.values())
+          .sort((a, b) => {
+            const numA = Number(a.match(/_(\d+)\.(jpg|jpeg|png|webp)/i)?.[1] || 0)
+            const numB = Number(b.match(/_(\d+)\.(jpg|jpeg|png|webp)/i)?.[1] || 0)
+            return numA - numB
+          })
+          .slice(0, 20)
       }
     }
 
